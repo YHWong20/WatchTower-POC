@@ -1,0 +1,219 @@
+{
+  "id": "INV-0001",
+  "opened_at": "2026-10-10T09:21:30Z",
+  "trigger": {
+    "mode": "incident_investigation",
+    "alarm": {
+      "tool": "splunk",
+      "name": "NodeNotReady",
+      "entity": "ocp-sim-worker",
+      "fired_at": "2026-10-10T09:20:41Z"
+    },
+    "requested_by": "sre-on-shift"
+  },
+  "playbook": "ocp-node-flap",
+  "observations": [
+    {
+      "id": "obs-1",
+      "text": "Splunk alert NodeNotReady fired for worker-1",
+      "signal_ids": [
+        "sig-91b0d2e4"
+      ]
+    },
+    {
+      "id": "obs-2",
+      "text": "kubernetes Service timeouts from worker-1 above baseline for 12 min",
+      "signal_ids": [
+        "sig-3f9a1c07"
+      ]
+    },
+    {
+      "id": "obs-3",
+      "text": "OutDiscards rising on cisco-sim-1 Gi1/0/13 for 6 polls",
+      "signal_ids": [
+        "sig-c4e8a210"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "ev-1",
+      "domain": "openshift",
+      "source": "splunk",
+      "query": "index=ocp sourcetype=kube:events reason IN (NodeNotReady, NodeReady) involvedObject.name=ocp-sim-worker earliest=-30m",
+      "collected_at": "2026-10-10T09:21:34Z",
+      "excerpt": "{\"_time\":\"2026-10-10T09:20:41Z\",\"reason\":\"NodeNotReady\"}\n{\"_time\":\"2026-10-10T09:21:27Z\",\"reason\":\"NodeReady\"}",
+      "finding": "NotReady 09:20:41, Ready 09:21:27: 46 s, above the 40 s grace, below the 300 s eviction threshold",
+      "interpreted_by": "rule"
+    },
+    {
+      "id": "ev-2",
+      "domain": "openshift",
+      "source": "splunk",
+      "query": "index=ocp sourcetype=kube:events involvedObject.name=ocp-sim-worker reason IN (Rebooted, Starting) earliest=-30m",
+      "collected_at": "2026-10-10T09:21:35Z",
+      "excerpt": "",
+      "finding": "No Rebooted or Starting events: no reboot, no kubelet restart",
+      "interpreted_by": "rule"
+    },
+    {
+      "id": "ev-3",
+      "domain": "openshift",
+      "source": "splunk",
+      "query": "index=ocp sourcetype=kube:container:svc-prober host=ocp-sim-worker \"i/o timeout\" earliest=-30m | timechart span=1m count",
+      "collected_at": "2026-10-10T09:21:36Z",
+      "excerpt": "{\"_time\":\"2026-10-10T09:18:00Z\",\"count\":\"4\"}\n{\"_time\":\"2026-10-10T09:19:00Z\",\"count\":\"7\"}",
+      "finding": "API Service timeouts from worker-1 on 41% of probes in the last 15 min",
+      "interpreted_by": "rule"
+    },
+    {
+      "id": "ev-4",
+      "domain": "network",
+      "source": "solarwinds",
+      "query": "SELECT DateTime, InDiscards, OutDiscards, InErrors, OutErrors FROM Orion.NPM.InterfaceErrors WHERE InterfaceID = 13 AND DateTime > ADDDATE('minute', -30, GETUTCDATE()) ORDER BY DateTime",
+      "collected_at": "2026-10-10T09:21:37Z",
+      "excerpt": "{\"DateTime\":\"2026-10-10T09:20:00Z\",\"OutDiscards\":1840,\"InErrors\":0}",
+      "finding": "OutDiscards on Gi1/0/13 rising for 6 polls, still rising; InErrors and OutErrors flat",
+      "interpreted_by": "rule"
+    },
+    {
+      "id": "ev-5",
+      "domain": "network",
+      "source": "probe_cli",
+      "query": "show platform hardware fed switch active qos queue stats interface Gi1/0/13",
+      "reason_for_probe": "Per-queue drops are not polled by SolarWinds (needs_live in ocp-node-flap)",
+      "collected_at": "2026-10-10T09:21:40Z",
+      "excerpt": "Queue 1 Drop-TH0 ... 18422",
+      "finding": "Drops concentrated in egress queue 1",
+      "interpreted_by": "rule"
+    },
+    {
+      "id": "ev-6",
+      "domain": "openshift",
+      "source": "splunk",
+      "query": "index=ocp sourcetype=kube:events namespace IN (openshift-kube-apiserver, openshift-etcd, kube-system) source_host=ocp-sim-worker reason IN (Killing, Started, BackOff, Unhealthy) earliest=-30m | stats count by involvedObject.name, reason",
+      "collected_at": "2026-10-10T09:21:36Z",
+      "excerpt": "",
+      "finding": "No Killing or Started events: API server and etcd pods did not restart",
+      "interpreted_by": "rule"
+    },
+    {
+      "id": "ev-7",
+      "domain": "openshift",
+      "source": "splunk",
+      "query": "index=ocp sourcetype=kube:events reason IN (TaintManagerEviction, Evicted, Preempted) earliest=-30m",
+      "collected_at": "2026-10-10T09:21:36Z",
+      "excerpt": "",
+      "finding": "No evictions",
+      "interpreted_by": "rule"
+    }
+  ],
+  "correlations": [
+    {
+      "id": "cor-1",
+      "kind": "topology+time",
+      "text": "worker-1 is fed by cisco-sim-1 Gi1/0/13; its API timeouts and the port's drops rose in the same 10 min",
+      "refs": [
+        "ev-3",
+        "ev-4"
+      ]
+    }
+  ],
+  "hypotheses": [
+    {
+      "id": "H1",
+      "statement": "Congestion on the node's switch path delays API traffic and lease renewals",
+      "proposed_by": "playbook",
+      "supporting": [
+        "ev-3",
+        "ev-4",
+        "ev-5"
+      ],
+      "refuting": [],
+      "missing": [
+        "lease_failures"
+      ],
+      "confidence": 0.82,
+      "confidence_rule": 0.78,
+      "llm_adjustment": {
+        "delta": 0.04,
+        "reason": "Queue drops and timeouts start within the same minute"
+      }
+    },
+    {
+      "id": "H4",
+      "statement": "CPU or memory starvation on the node stalls the kubelet",
+      "proposed_by": "playbook",
+      "supporting": [],
+      "refuting": [],
+      "missing": [
+        "node_pressure",
+        "node_cpu_high"
+      ],
+      "confidence": 0.0,
+      "confidence_rule": 0.0
+    }
+  ],
+  "conclusion": {
+    "likely_cause": "Congestion on cisco-sim-1 Gi1/0/13 delayed worker-1's API calls and lease renewals",
+    "what_happened": "worker-1 had a transient NotReady (node flap) for 46 s: above the 40 s grace period, below the 300 s eviction threshold. It did not reboot and the kubelet did not restart (no Rebooted or Starting events). No pods were evicted.",
+    "confidence_label": "high",
+    "unknowns": [
+      "Which traffic fills queue 1"
+    ],
+    "refs": [
+      "ev-1",
+      "ev-2",
+      "ev-4",
+      "ev-6",
+      "ev-7",
+      "cor-1"
+    ]
+  },
+  "recommended_actions": [
+    {
+      "step": "Find top talkers towards worker-1 (NetFlow, or a SPAN capture by the network team)",
+      "why": "Queue 1 drops point at bursty traffic",
+      "kind": "diagnostic",
+      "from_catalogue": "top_talkers"
+    },
+    {
+      "step": "Confirm queue drops by class",
+      "command": "show platform hardware fed switch active qos queue stats interface Gi1/0/13",
+      "why": "Check the drops keep rising",
+      "kind": "diagnostic",
+      "from_catalogue": "queue_stats"
+    },
+    {
+      "step": "Watch the node's lease renewals while drops continue",
+      "command": "oc get lease ocp-sim-worker -n kube-node-lease -w",
+      "why": "A second gap over 40 s means another flap",
+      "kind": "diagnostic",
+      "from_catalogue": "lease_watch"
+    }
+  ],
+  "escalation": {
+    "team": "network",
+    "priority": "P3",
+    "reason": "Single NotReady flap, recovered, congestion on Gi1/0/13 still present",
+    "raise_if": "A second flap within 60 min (P2)"
+  },
+  "llm_used": true,
+  "audit_ids": [
+    "aud-12",
+    "aud-13",
+    "aud-14",
+    "aud-15",
+    "aud-16",
+    "aud-17",
+    "aud-18"
+  ],
+  "reuse": {
+    "reused": 6,
+    "probed": 1,
+    "rate": 0.857,
+    "probe_reasons": [
+      "Per-queue drops are not polled by SolarWinds (needs_live in ocp-node-flap)"
+    ]
+  }
+}

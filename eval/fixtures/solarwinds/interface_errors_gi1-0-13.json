@@ -1,0 +1,10 @@
+{
+  "results": [
+    {"DateTime": "2026-10-10T09:15:00", "InDiscards": 0, "OutDiscards": 120, "InErrors": 0, "OutErrors": 0},
+    {"DateTime": "2026-10-10T09:16:00", "InDiscards": 0, "OutDiscards": 410, "InErrors": 0, "OutErrors": 0},
+    {"DateTime": "2026-10-10T09:17:00", "InDiscards": 0, "OutDiscards": 760, "InErrors": 0, "OutErrors": 0},
+    {"DateTime": "2026-10-10T09:18:00", "InDiscards": 0, "OutDiscards": 1190, "InErrors": 0, "OutErrors": 0},
+    {"DateTime": "2026-10-10T09:19:00", "InDiscards": 0, "OutDiscards": 1505, "InErrors": 0, "OutErrors": 0},
+    {"DateTime": "2026-10-10T09:20:00", "InDiscards": 0, "OutDiscards": 1840, "InErrors": 0, "OutErrors": 0}
+  ]
+}

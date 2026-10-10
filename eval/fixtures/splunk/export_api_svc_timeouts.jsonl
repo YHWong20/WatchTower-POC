@@ -1,0 +1,4 @@
+{"preview":true,"offset":0,"result":{"_time":"2026-10-10T09:17:00.000+00:00","count":"2"}}
+{"preview":false,"offset":0,"result":{"_time":"2026-10-10T09:17:00.000+00:00","count":"3"}}
+{"preview":false,"offset":1,"result":{"_time":"2026-10-10T09:18:00.000+00:00","count":"4"}}
+{"preview":false,"offset":2,"lastrow":true,"result":{"_time":"2026-10-10T09:19:00.000+00:00","count":"7"}}

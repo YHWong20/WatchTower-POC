@@ -1,0 +1,2 @@
+{"preview":false,"offset":0,"result":{"_time":"2026-10-10T09:20:41.000+00:00","host":"ocp-sim-control-plane","sourcetype":"kube:events","reason":"NodeNotReady","involvedObject.name":"ocp-sim-worker","message":"Node ocp-sim-worker status is now: NodeNotReady"}}
+{"preview":false,"offset":1,"lastrow":true,"result":{"_time":"2026-10-10T09:21:27.000+00:00","host":"ocp-sim-control-plane","sourcetype":"kube:events","reason":"NodeReady","involvedObject.name":"ocp-sim-worker","message":"Node ocp-sim-worker status is now: NodeReady"}}

@@ -1,0 +1,17 @@
+DATA Port:12 Enqueue Counters
+-------------------------------
+Queue Buffers Enqueue-TH0 Enqueue-TH1 Enqueue-TH2 Qpolicer
+      (Count)     (Bytes)     (Bytes)     (Bytes)   (Bytes)
+----- ------- ----------- ----------- ----------- ---------
+    0       0           0           0     1820344         0
+    1       0           0           0    98213377         0
+    2       0           0           0           0         0
+
+DATA Port:12 Drop Counters
+-------------------------------
+Queue Drop-TH0    Drop-TH1    Drop-TH2    SBufDrop    QebDrop     QpolicerDrop
+      (Bytes)     (Bytes)     (Bytes)     (Bytes)     (Bytes)     (Bytes)
+----- ----------- ----------- ----------- ----------- ----------- -----------
+    0           0           0           0           0           0           0
+    1           0           0       18422           0           0           0
+    2           0           0           0           0           0           0

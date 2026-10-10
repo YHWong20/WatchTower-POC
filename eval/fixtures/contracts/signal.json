@@ -1,0 +1,17 @@
+{
+  "id": "sig-3f9a1c07",
+  "ts": "2026-10-10T09:14:00Z",
+  "domain": "openshift",
+  "agent": "openshift-agent",
+  "rule": "ocp.api_svc_timeouts",
+  "entity": {"kind": "node", "name": "worker-1"},
+  "severity": "weak",
+  "summary": "worker-1: 9 kubernetes Service timeouts in 5 min (baseline 0.4)",
+  "value": 9,
+  "baseline": 0.4,
+  "window_s": 300,
+  "source": {
+    "tool": "splunk",
+    "query": "index=ocp sourcetype=kube:container:svc-prober host=ocp-sim-worker \"i/o timeout\" earliest=-5m | timechart span=1m count"
+  }
+}

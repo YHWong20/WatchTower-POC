@@ -1,0 +1,8 @@
+{
+  "origin": "https://splunk:8089/services/alerts/fired_alerts",
+  "entry": [
+    {"name": "NodeNotReady",
+     "content": {"triggered_alert_count": 1, "severity": 4, "trigger_time": 1791624041, "entity": "ocp-sim-worker"}}
+  ],
+  "paging": {"total": 1, "perPage": 30, "offset": 0}
+}

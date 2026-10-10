@@ -1,0 +1,12 @@
+{
+  "kind": "Node",
+  "apiVersion": "v1",
+  "metadata": {"name": "ocp-sim-worker", "labels": {"wt/name": "worker-1", "wt/role": "worker"}},
+  "status": {
+    "conditions": [
+      {"type": "Ready", "status": "True", "reason": "KubeletReady",
+       "lastHeartbeatTime": "2026-10-10T09:22:00Z", "lastTransitionTime": "2026-10-10T09:21:27Z"}
+    ],
+    "nodeInfo": {"bootID": "4c1f6a2e-7d0b-4b1e-9a55-0e2f1d7c9b31", "kubeletVersion": "v1.33.1"}
+  }
+}
