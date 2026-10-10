@@ -50,6 +50,16 @@ docker compose exec -T redis redis-cli ping 2>/dev/null | grep -q PONG && ok "re
 echo " existing-tool stand-ins (splunk-sim, forwarder, solarwinds-sim)"
 uv run --quiet python lab/check_tools.py $(kind get nodes --name ocp-sim 2>/dev/null) || fails=$((fails + 1))
 
+echo " agents and Copilot"
+for a in network-agent:8101 openshift-agent:8102 parent-agent:8103; do
+  name=${a%%:*}; port=${a##*:}
+  if h=$(curl -fs -m 3 "http://127.0.0.1:$port/health" 2>/dev/null); then
+    st=$(echo "$h" | jq -r .status); extra=$(echo "$h" | jq -r '[.watch_error, (.stale // [] | join("; "))] | map(select(. != null and . != "")) | join(" ")')
+    [[ "$st" == ok ]] && ok "$name ok${extra:+ ($extra)}" || bad "$name $st${extra:+ ($extra)}"
+  else bad "$name not answering on :$port (make up)"; fi
+done
+curl -fs -m 5 -o /dev/null http://127.0.0.1:8080/ && ok "Copilot on http://localhost:8080" || bad "Copilot not answering on :8080"
+
 echo " model"
 model="${WT_MODEL:-$([[ "$PROFILE" == lite ]] && echo gemma3:1b || echo gemma3:4b)}"
 if [[ "${WT_LLM:-on}" == "off" ]]; then skip "WT_LLM=off"

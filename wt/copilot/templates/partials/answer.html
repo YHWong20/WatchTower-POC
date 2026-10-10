@@ -1,0 +1,2 @@
+<div class="ask-log"><b>SRE:</b> {{ q }}<br><b>WatchTower:</b> {{ a.answer|code|safe }}
+{% if a.cited %}<div class="muted small">cites {% for c in a.cited %}{% if inv_id and c.startswith('ev-') %}<a href="#{{ c }}">{{ c }}</a>{% else %}{{ c }}{% endif %}{{ ', ' if not loop.last }}{% endfor %} · {{ 'model' if by == 'llm' else 'keyword match' }}</div>{% endif %}</div>

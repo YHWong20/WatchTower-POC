@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block body %}
+<div class="wrap"><div class="card"><h3>Opening an investigation</h3>
+<div class="small">The Parent Agent is picking the playbook and tasking the domain agents…</div></div></div>
+<script>
+async function poll() { const r = await fetch('/api/request/{{ rid }}'); const d = await r.json();
+  if (d.investigation_id) { location.href = '/investigations/' + d.investigation_id; } else { setTimeout(poll, 700); } }
+poll();
+</script>
+{% endblock %}

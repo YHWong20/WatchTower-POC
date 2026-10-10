@@ -1,0 +1,38 @@
+/* WatchTower Copilot: the wireframes' look (wireframes/wf.css), as a live page. */
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"Liberation Sans",Arial,Helvetica,sans-serif;background:#F4F6F8;color:#12263A;font-size:14px;min-width:1180px}
+a{color:inherit}
+.top{height:54px;background:#12263A;color:#fff;display:flex;align-items:center;padding:0 22px;gap:14px;position:sticky;top:0;z-index:5}
+.logo{font-weight:bold;font-size:19px;text-decoration:none;color:#fff}.sub{color:#CFE3EA;font-size:13px;text-decoration:none}
+.pill{border-radius:14px;padding:4px 11px;font-size:12px;font-weight:bold;white-space:nowrap;display:inline-block}
+.p-out{border:1px solid #9FB3C1;color:#CFE3EA}.p-grn{background:#0E9F8E;color:#fff}.p-amb{background:#E89B2C;color:#fff}.p-red{background:#D9534F;color:#fff}
+.p-grey{background:#EEF3F6;color:#5B6B7A}
+.dot-ok{color:#3DD6A3}.dot-bad{color:#FF7A73}
+.sp{flex:1}.muted{color:#5B6B7A}.small{font-size:12px}
+.wrap{padding:16px 22px;display:grid;gap:14px;align-items:start}
+.card{background:#fff;border:1.5px solid #D5DEE5;border-radius:10px;padding:13px 15px}
+h3{font-size:12px;letter-spacing:1px;color:#5B6B7A;margin-bottom:10px;text-transform:uppercase}
+.src{display:inline-block;border-radius:5px;padding:1px 6px;font-size:10.5px;font-weight:bold;color:#fff;margin-right:5px;vertical-align:1px;white-space:nowrap}
+.s-spl{background:#1F4E6B}.s-sw{background:#5B6B7A}.s-cli{background:#E89B2C}.s-api{background:#E89B2C}.s-wt{background:#0E9F8E}
+.btn{display:inline-block;text-align:center;border:1.5px solid #12263A;border-radius:7px;padding:5px 10px;font-size:12px;font-weight:bold;margin:6px 6px 0 0;background:#fff;color:#12263A;cursor:pointer;font-family:inherit;text-decoration:none}
+.btn.pri{background:#12263A;color:#fff}.btn:hover{filter:brightness(1.1)}
+.btn.sm{padding:2px 7px;font-size:11px;margin:4px 0 0 0}
+.row{display:flex;gap:8px;align-items:flex-start;padding:7px 0;border-bottom:1px solid #EEF3F6;font-size:12.5px;line-height:1.4}
+.row:last-child{border-bottom:0}
+.bar{height:8px;border-radius:4px;background:#EEF3F6;margin-top:5px;overflow:hidden}.bar i{display:block;height:8px}
+pre{font-family:"Liberation Mono",Menlo,monospace;font-size:10.5px;background:#12263A;color:#CFE3EA;padding:6px 8px;border-radius:6px;margin-top:4px;white-space:pre-wrap;word-break:break-word}
+.k{font-family:"Liberation Mono",Menlo,monospace;font-size:11px;background:#EEF3F6;padding:1px 4px;border-radius:4px}
+.item{border:1.5px solid #D5DEE5;border-radius:10px;padding:13px 14px;margin-bottom:12px}
+.item.emerging{border-color:#E89B2C}.item.investigating{border-color:#D9534F}
+.cards{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+.spark{width:100%;height:30px;margin-top:6px;color:#1F4E6B;background:#F4F7F9;border-radius:6px}
+.ask-log{background:#EEF3F6;border-radius:8px;padding:9px;font-size:12.5px;line-height:1.45;margin-bottom:8px}
+.ask input{width:100%;border:1.5px solid #9FB3C1;border-radius:8px;padding:8px;font-size:13px;font-family:inherit}
+details summary{cursor:pointer;color:#1F4E6B;font-size:11.5px;margin-top:3px}
+.tl{position:relative;margin:6px 0 4px 8px;border-left:2px solid #D5DEE5;padding-left:14px}
+.tl div{position:relative;padding:4px 0;font-size:12.5px}.tl div:before{content:"";position:absolute;left:-20px;top:9px;width:9px;height:9px;border-radius:50%;background:#1F4E6B}
+.tl div.bad:before{background:#D9534F}.tl div.good:before{background:#0E9F8E}
+.esc{border:1.5px solid #E89B2C;border-radius:10px;padding:12px 14px;font-size:13px;line-height:1.5}
+.htmx-indicator{opacity:0;transition:opacity .2s}.htmx-request .htmx-indicator,.htmx-request.htmx-indicator{opacity:1}
+.flash{background:#FFF4D6;border:1px dashed #E89B2C;color:#7A5200;font-size:12px;padding:6px 9px;border-radius:6px;margin-top:8px}
+table.list{width:100%;border-collapse:collapse;font-size:13px}table.list td,table.list th{padding:7px 6px;border-bottom:1px solid #EEF3F6;text-align:left}

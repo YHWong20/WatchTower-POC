@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block body %}
+{% if not inv %}
+<div id="live" hx-get="/partials/investigation/{{ inv_id }}" hx-trigger="load, every 2s">{% include "partials/progress.html" %}</div>
+{% else %}
+{% set top = inv.hypotheses[0] %}
+<div class="wrap">
+ <div class="card" style="display:flex;gap:20px">
+  <div style="flex:1">
+   <div class="muted small"><b>{{ inv.trigger.requested_by or 'WatchTower' }}</b>{% if inv.trigger.alarm %} · alarm {{ inv.trigger.alarm.tool }} {{ inv.trigger.alarm.name }} on {{ inv.trigger.alarm.entity }}{% endif %} · opened {{ inv.opened_at.strftime('%H:%M:%S') }} UTC · playbook {{ inv.playbook }}</div>
+   <div style="font-size:21px;font-weight:bold;margin:8px 0 6px">Likely cause: {{ inv.conclusion.likely_cause }}</div>
+   <div style="font-size:13.5px;line-height:1.5">{{ inv.conclusion.what_happened }}</div>
+   <div class="muted small" style="margin-top:6px">refs {% for r in inv.conclusion.refs %}<a href="#{{ r }}">{{ r }}</a>{{ ', ' if not loop.last }}{% endfor %}{% if inv.llm_used %} · worded with the model (facts from rules){% else %} · rule-based (model off or not needed){% endif %}</div>
+  </div>
+  <div style="text-align:right;min-width:300px">
+   <span class="pill {{ 'p-red' if inv.conclusion.confidence_label == 'high' else 'p-amb' if inv.conclusion.confidence_label == 'medium' else 'p-grey' }}" style="font-size:13px">CONFIDENCE: {{ inv.conclusion.confidence_label|upper }} {{ '%.2f'|format(top.confidence) }}</span>
+   <div class="muted small" style="margin-top:8px;line-height:1.5">{{ domains|length }} domain{{ 's' if domains|length != 1 }} · {{ inv.reuse.reused }} of {{ inv.reuse.reused + inv.reuse.probed }} evidence items reused<br>{{ sources|join(' + ') }} · {{ inv.reuse.probed }} live probe{{ 's' if inv.reuse.probed != 1 }} · reuse {{ '%.0f'|format(inv.reuse.rate * 100) }}%</div>
+   <div style="margin-top:8px"><button class="btn pri" onclick="copyNote(this)">Copy escalation note</button><button class="btn" onclick="document.getElementById('askq').focus()">Ask about this</button></div>
+   <textarea id="note" style="position:absolute;left:-9999px">{{ inv.escalation.note_markdown }}</textarea>
+  </div>
+ </div>
+</div>
+<div class="wrap" style="grid-template-columns:1fr 1fr 0.85fr;padding-top:0">
+ <div class="card">
+  <h3>Evidence chain</h3>
+  {% for o in inv.observations %}
+  <div class="row" id="{{ o.id }}"><span class="src s-wt">SIGNAL</span><div><b>Observation:</b> {{ o.text|code|safe }} <span class="muted small">{{ o.id }}{% if o.signal_ids %} · {{ o.signal_ids|join(', ') }}{% endif %}</span></div></div>
+  {% endfor %}
+  {% for e in inv.evidence %}
+  <div class="row" id="{{ e.id }}"><span class="src {{ TAGS[e.source][1] }}">{{ TAGS[e.source][0] }}</span><div style="min-width:0"><b>{{ e.id }}:</b> {{ e.finding|code|safe }}
+   {% if e.reason_for_probe %}<span class="muted"> Probed because {{ e.reason_for_probe }}.</span>{% endif %}
+   {% if e.interpreted_by == 'llm' %}<span class="muted small"> (interpreted by the model)</span>{% endif %}
+   <details><summary>{{ 'command' if e.source == 'probe_cli' else 'query' }} and raw output · {{ e.collected_at.strftime('%H:%M:%S') }} UTC</summary><pre>{{ e.query }}</pre><pre style="background:#1d3349">{{ e.excerpt or '(no rows)' }}</pre></details></div></div>
+  {% endfor %}
+  {% for c in inv.correlations %}
+  <div class="row" id="{{ c.id }}"><span class="src s-wt">{{ 'TOPOLOGY' if 'topology' in c.kind and loop.first else 'WHY' if c.kind == 'topology' else c.kind|upper }}</span><div><b>Correlation:</b> {{ c.text|code|safe }} <span class="muted small">{{ c.refs|join(', ') }}</span></div></div>
+  {% endfor %}
+ </div>
+ <div class="card">
+  <h3>Hypotheses · {{ inv.playbook }} playbook</h3>
+  {% for h in inv.hypotheses %}
+  <div style="padding:7px 0;border-bottom:1px solid #EEF3F6">
+   <div style="display:flex"><b style="font-size:13.5px;flex:1">{{ h.id }} {{ h.statement }}</b><span class="small">{{ '%.2f'|format(h.confidence) }}</span></div>
+   <div class="muted small">
+    {% if h.proposed_by == 'llm' %}proposed by the model; no evidence gathered for it yet (starts at 0)
+    {% else %}for: {{ h.supporting|join(', ') if h.supporting else 'nothing yet' }}{% if h.refuting %} · against: {% for r in h.refuting %}<a href="#{{ r }}">{{ r }}</a> {{ ev[r].finding[:90] }}{{ '; ' if not loop.last }}{% endfor %}{% else %} · none against{% endif %}{% if h.missing %} · missing: {{ h.missing|join(', ') }}{% endif %}{% endif %}
+    {% if h.llm_adjustment %}<br>model adjustment {{ '%+.2f'|format(h.llm_adjustment.delta) }}: {{ h.llm_adjustment.reason }}{% endif %}
+   </div>
+   <div class="bar"><i style="width:{{ (h.confidence * 100)|round }}%;background:{{ '#D9534F' if loop.first and h.confidence >= 0.7 else '#E89B2C' if loop.first else '#9FB3C1' }}"></i></div>
+  </div>
+  {% endfor %}
+  <h3 style="margin-top:16px">What happened</h3>
+  <div class="tl">{% for t in timeline %}<div class="{{ 'bad' if 'NotReady' in t.text or 'start' in t.text or 'fail' in t.text else 'good' if 'Ready' in t.text else '' }}"><b>{{ t.t }}</b> {{ t.text|code|safe }} {% if t.ev %}<a class="muted small" href="#{{ t.ev }}">{{ t.ev }}</a>{% endif %}</div>{% else %}<div>No timeline: the evidence has no event times.</div>{% endfor %}</div>
+  {% if inv.conclusion.unknowns %}<div class="muted small" style="margin-top:8px">Still unknown: {{ inv.conclusion.unknowns|join('; ') }}.</div>{% endif %}
+  <div class="flash">Confidence comes from counting evidence for and against, not from the model's opinion.</div>
+ </div>
+ <div class="card">
+  <h3>Recommended next steps (read-only)</h3>
+  {% for a in inv.recommended_actions %}
+  <div class="row"><b>{{ loop.index }}</b><div>{{ a.step|code|safe }}<div class="muted small">{{ a.why }}</div>{% if a.command %}<pre>{{ a.command }}</pre>{% endif %}</div></div>
+  {% endfor %}
+  <h3 style="margin-top:16px">Escalation</h3>
+  <div class="esc"><b>{{ inv.escalation.team }} · {{ inv.escalation.priority }}</b> ({{ inv.escalation.reason }}).<br>{{ inv.escalation.raise_if }}.
+   <div class="muted small" style="margin-top:4px">The note includes the timeline, the Splunk and SolarWinds queries with counts, and the probe output.</div></div>
+  <div class="muted small" style="margin-top:10px">WatchTower stops here. Any change is made by the network or platform team through change control.</div>
+  <h3 style="margin-top:16px">Ask about this investigation</h3>
+  <div id="answers"></div>
+  <form class="ask" hx-post="/ask" hx-target="#answers" hx-swap="beforeend" hx-on::after-request="this.reset()">
+   <input type="hidden" name="inv_id" value="{{ inv.id }}"><input id="askq" name="question" placeholder="e.g. did it reboot? why only some calls?" autocomplete="off" required>
+   <div class="muted small htmx-indicator" style="margin-top:4px">thinking…</div>
+  </form>
+ </div>
+</div>
+<script>
+function copyNote(btn) { const t = document.getElementById('note'); t.select();
+  (navigator.clipboard ? navigator.clipboard.writeText(t.value) : Promise.resolve(document.execCommand('copy')))
+    .then(() => { btn.textContent = 'Copied ✓'; setTimeout(() => btn.textContent = 'Copy escalation note', 2000); }); }
+</script>
+{% endif %}
+{% endblock %}

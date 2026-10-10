@@ -1,0 +1,27 @@
+{% if a.splunk %}
+  {% for al in a.splunk[:4] %}
+  <div class="row" data-alarm="{{ al.savedsearch_name }}" data-entity="{{ al.node }}" data-trigger="{{ al.trigger_time }}"><span class="src s-spl">SPLUNK</span><div style="flex:1"><b>{{ al.savedsearch_name }}</b>
+    <div class="muted small">{{ al.node or al.entity or '' }} · fired {{ al.trigger_time|hhmm }} UTC ({{ al.trigger_time|ago }})</div>
+    <form hx-post="/investigate" hx-swap="none" style="display:inline">
+      <input type="hidden" name="alarm_tool" value="splunk"><input type="hidden" name="alarm_name" value="{{ al.savedsearch_name }}">
+      <input type="hidden" name="alarm_entity" value="{{ al.node }}"><input type="hidden" name="alarm_fired_at" value="{{ al.trigger_time_rendered or '' }}">
+      <button class="btn sm pri">Investigate</button></form></div></div>
+  {% endfor %}
+{% else %}
+  <div class="row"><span class="src s-spl">SPLUNK</span><div><b>{{ 'No active alarms' if a.splunk_ok else 'Not reachable' }}</b>
+    <div class="muted small">Last alert: {{ a.splunk_last|ago }}</div></div></div>
+{% endif %}
+{% if a.solarwinds %}
+  {% for al in a.solarwinds[:4] %}
+  <div class="row" data-alarm="solarwinds" data-trigger="{{ al.TriggeredDateTime }}"><span class="src s-sw">SOLARWINDS</span><div style="flex:1"><b>{{ al.TriggeredMessage }}</b>
+    <div class="muted small">since {{ al.TriggeredDateTime|hhmm }} UTC</div>
+    <form hx-post="/investigate" hx-swap="none"><input type="hidden" name="alarm_tool" value="solarwinds">
+      <input type="hidden" name="alarm_name" value="{{ al.TriggeredMessage[:80] }}"><button class="btn sm pri">Investigate</button></form></div></div>
+  {% endfor %}
+{% else %}
+  <div class="row"><span class="src s-sw">SOLARWINDS</span><div><b>{{ 'No active alarms' if a.solarwinds_ok else 'Not reachable' }}</b>
+    {% if port_util %}<div class="muted small">{{ port_util[0] }} utilisation {{ '%.0f'|format(port_util[1]) }}% (alert at 90% for 5 min)</div>{% endif %}</div></div>
+{% endif %}
+{% if not a.splunk and not a.solarwinds %}
+<div class="muted small" style="margin:10px 0 2px;line-height:1.45">The existing tools see nothing wrong: every signal is below its threshold. WatchTower is watching for weak signals across domains.</div>
+{% endif %}

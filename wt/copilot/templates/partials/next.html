@@ -1,0 +1,11 @@
+<h3>What happens next</h3>
+<div class="small" style="line-height:1.5">WatchTower keeps watching. If confidence passes 0.7 or a node changes state, the Parent Agent opens an investigation and notifies the on-shift SRE.</div>
+{% if item %}
+<h3 style="margin-top:18px">Suggested now (read-only)</h3>
+{% for s in item.suggestions %}
+<div class="row"><b>{{ loop.index }}</b><div>{{ s.step|code|safe }}{% if s.command %}<pre>{{ s.command }}</pre>{% endif %}</div></div>
+{% endfor %}
+{% if item.investigation_id %}<div class="row"><b>→</b><div><a href="/investigations/{{ item.investigation_id }}">Investigation {{ item.investigation_id }}</a> is open for this item.</div></div>{% endif %}
+{% endif %}
+<div class="muted small" style="margin-top:10px">WatchTower changes nothing. These are suggestions for the SRE.</div>
+<div class="muted small" style="margin-top:14px">Every signal shows its source: reused from Splunk or SolarWinds, or a live probe.</div>

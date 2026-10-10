@@ -143,7 +143,9 @@ class ParentAgent:
             mode = "incident_investigation" if state_change else "proactive_watch"
             inv_id = await self.start(running_only=state_change, req=Request(
                 mode=mode, node=item.node, switch=item.switch, port=item.port, watch_item=item,
-                requested_by=f"parent-agent ({'node state change: ' + sig.summary if state_change else 'watch item ' + item.id + ' reached 0.7'})"[:200],
+                requested_by=(f'WatchTower, {sig.ts:%H:%M} UTC: "{item.node} went NotReady. Investigating."' if state_change
+                              else f'WatchTower, {sig.ts:%H:%M} UTC: "watch item {item.id} reached '
+                                   f'{item.confidence:.2f}. Investigating."'),
                 trigger_signal=sig.rule, signal_ids=[sig.id]))
             item.investigation_id = inv_id
             item.status = "investigating"

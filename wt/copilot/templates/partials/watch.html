@@ -1,0 +1,35 @@
+{% for i in items %}
+<div class="item {{ i.status }}" {% if i.status == 'closed' %}style="opacity:.6"{% endif %}>
+  <div style="display:flex;gap:10px;align-items:center">
+    {% if i.status == 'investigating' %}<span class="pill p-red">INVESTIGATING</span>
+    {% elif i.scope == 'cross_domain' %}<span class="pill p-amb">EMERGING · cross-domain</span>
+    {% elif i.status == 'closed' %}<span class="pill p-grey">CLOSED</span>
+    {% else %}<span class="pill p-grey">WATCHING · single domain</span>{% endif %}
+    <span class="muted small">{{ i.id }} · updated {{ i.updated_at|hhmm }} UTC · {{ '%.0f'|format(i.reuse.rate * 100) }}% reused, {{ i.reuse.probed }} probes</span>
+    <span class="sp"></span><span class="small"><b>Confidence: {{ i.confidence_label }} ({{ '%.2f'|format(i.confidence) }})</b></span>
+  </div>
+  <div style="font-size:{{ 17 if i.scope == 'cross_domain' else 15 }}px;font-weight:bold;margin:9px 0 4px">{{ i.title }}</div>
+  <div class="muted" style="font-size:13px">{{ i.impact }}</div>
+  <div class="cards">
+    {% for c in cards[i.id] %}
+    <div class="card" style="padding:9px"><span class="src {{ c.cls }}">{{ c.tag }}</span><b class="small">{{ c.agent }}</b>
+      <span class="muted small" style="float:right">{{ c.id }}</span>
+      <div class="small" style="margin-top:4px">{{ c.html|safe }}</div>{{ c.spark|safe }}
+      <details><summary>query</summary><pre>{{ c.query }}</pre></details></div>
+    {% endfor %}
+    {% if i.correlation %}
+    <div class="card" style="padding:9px"><span class="src s-wt">CORRELATION</span><b class="small">Parent Agent</b>
+      <div class="small" style="margin-top:4px">{{ i.correlation|code|safe }}</div></div>
+    {% endif %}
+  </div>
+  <div style="margin-top:10px">
+    {% if i.investigation_id %}<a class="btn pri" href="/investigations/{{ i.investigation_id }}">Open investigation {{ i.investigation_id }}</a>
+    {% else %}<form hx-post="/investigate" hx-swap="none" style="display:inline"><input type="hidden" name="watch_item_id" value="{{ i.id }}"><button class="btn pri">Open investigation</button></form>{% endif %}
+    <button class="btn" hx-post="/watch/{{ i.id }}/explain" hx-target="#explained" hx-indicator="#ex-{{ i.id }}">Explain in plain words</button>
+    {% if i.status != 'investigating' %}<button class="btn" hx-post="/watch/{{ i.id }}/dismiss" hx-target="#explained">Not relevant</button>{% endif %}
+    <span class="muted small htmx-indicator" id="ex-{{ i.id }}">asking the model…</span>
+  </div>
+</div>
+{% else %}
+<div class="muted" style="padding:14px 0">Nothing to watch: no weak signals in the last 15 minutes.</div>
+{% endfor %}

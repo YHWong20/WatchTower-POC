@@ -71,6 +71,19 @@ class SplunkClient:
         )
 
 
+    async def fired_alert_instances(self) -> QueryResult:
+        """Every triggered instance (name, time, entity, message) from /services/alerts/fired_alerts/-."""
+        path = (self.sources.signals["active_alerts"].query_splunk or FIRED_ALERTS_PATH) + "/-"
+        async with self.audit.timed("query", self.actor, "splunk", f"GET {path}") as rec:
+            resp = await self.http.get(path, params={"output_mode": "json"})
+            resp.raise_for_status()
+            rows = [{"sid": e.get("name"), **(e.get("content") or {})} for e in resp.json().get("entry", [])]
+            rec.detail = f"{len(rows)} alert instances"
+        return QueryResult(
+            tool="splunk", query=f"GET {path}", rows=rows, duration_ms=rec.duration_ms, audit_id=rec.audit_id
+        )
+
+
 def _parse_export(body: str) -> list[dict[str, Any]]:
     """The export endpoint streams one JSON object per line. With preview results, keep only the
     final ones; skip messages and blank lines."""

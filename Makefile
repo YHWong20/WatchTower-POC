@@ -7,7 +7,7 @@ NODE ?= ocp-sim-control-plane2
 endif
 COMPOSE = docker compose --profile $(WT_PROFILE)
 
-.PHONY: sync test selfcheck lab-up lab-down up down logs health fault clear verify-flap verify-sources verify-watch verify-investigation demo record replay eval
+.PHONY: sync test selfcheck lab-up lab-down up down logs health fault clear verify-flap verify-sources verify-watch verify-investigation verify-copilot demo record replay eval
 
 sync:
 	uv sync
@@ -54,6 +54,9 @@ verify-watch:               ## phase 4 "done when": fault phase A -> both watch 
 
 verify-investigation:       ## phase 5 "done when": recorded incidents (eval/cases) with the LLM off and on
 	uv run pytest -v tests/test_investigation.py
+
+verify-copilot:             ## phase 6 / definition of done, live through the Copilot (full fault, ~15 min)
+	uv run python lab/verify_copilot.py
 
 # ---------------------------------------------------------------- later phases (see prompts/)
 demo record replay:

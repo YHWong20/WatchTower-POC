@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block body %}
+<div class="wrap"><div class="card"><h3>Investigations</h3>
+<table class="list"><tr><th>Id</th><th>Opened (UTC)</th><th>Trigger</th><th>Likely cause</th><th>Confidence</th><th>Escalation</th><th>Reuse</th></tr>
+{% for i in invs %}<tr><td><a href="/investigations/{{ i.id }}">{{ i.id }}</a></td><td>{{ i.opened_at.strftime('%Y-%m-%d %H:%M') }}</td>
+<td>{{ i.trigger.mode.replace('_', ' ') }}</td><td>{{ i.conclusion.likely_cause }}</td><td>{{ i.conclusion.confidence_label }} {{ '%.2f'|format(i.hypotheses[0].confidence) }}</td>
+<td>{{ i.escalation.team }} · {{ i.escalation.priority }}</td><td>{{ '%.0f'|format(i.reuse.rate * 100) }}%</td></tr>
+{% else %}<tr><td colspan="7" class="muted">No investigations yet.</td></tr>{% endfor %}</table></div></div>
+{% endblock %}

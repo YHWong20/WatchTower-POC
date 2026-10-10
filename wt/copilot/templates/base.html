@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WatchTower · {{ subtitle }}</title>
+<link rel="stylesheet" href="/static/copilot.css">
+<script src="/static/htmx.min.js"></script>
+<script src="/static/chart.umd.min.js"></script>
+</head><body>
+<div class="top">
+  <a class="logo" href="/">◉ WatchTower</a><span class="sub">Copilot · {{ subtitle }}</span>
+  <span class="sp"></span>
+  <a class="sub" href="/">Proactive watch</a><a class="sub" href="/investigations">Investigations</a>
+  <span class="pill p-out">Reading: SolarWinds <span class="{{ 'dot-ok' if solarwinds_ok else 'dot-bad' }}">●</span> Splunk <span class="{{ 'dot-ok' if splunk_ok else 'dot-bad' }}">●</span></span>
+  <span class="pill p-out" title="WT_MODEL, served by Ollama on the Mac">{{ model }} (on-prem) <span class="{{ 'dot-ok' if llm == 'online' else 'dot-bad' }}">●</span> {{ llm }}</span>
+  <span class="pill p-out" title="WatchTower never changes a switch or the cluster">Read-only</span>
+  <span class="sub" id="clock">{{ now }} UTC</span>
+</div>
+{% block body %}{% endblock %}
+<script>
+setInterval(() => { document.getElementById('clock').textContent = new Date().toISOString().substring(11, 19) + ' UTC'; }, 1000);
+</script>
+</body></html>

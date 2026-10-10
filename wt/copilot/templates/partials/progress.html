@@ -1,0 +1,9 @@
+<div class="wrap" style="grid-template-columns:1fr 1fr">
+ <div class="card"><h3>Investigation {{ inv_id }} · {{ progress.status }}{% if progress.playbook %} · playbook {{ progress.playbook }}{% endif %}</h3>
+  {% for s in progress.steps %}<div class="row"><span class="muted small" style="width:58px">{{ s.t }}</span><div>{{ s.text|code|safe }}</div></div>{% endfor %}
+  {% if progress.status == 'running' %}<div class="muted small" style="margin-top:8px">Evidence arrives as the domain agents answer…</div>{% endif %}
+ </div>
+ <div class="card"><h3>Evidence so far ({{ evidence|length }})</h3>
+  {% for e in evidence %}<div class="row"><span class="src {{ TAGS[e.source][1] }}">{{ TAGS[e.source][0] }}</span><div><b>{{ e.id }}</b> {{ e.finding|code|safe }}</div></div>{% endfor %}
+ </div>
+</div>

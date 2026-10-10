@@ -1,7 +1,7 @@
 # WatchTower lab services. Everything joins the `kind` network so it can reach the cluster.
 #   lite (8 GB Mac):  docker compose --profile lite up -d    -> redis + wt-sims
 #   full (16 GB):     docker compose --profile full up -d    -> redis + one container per sim
-# Phase 4 adds the agents.
+#   Agents: lite runs all four in one `wt-agents` container; full runs one container each.
 # The forwarder reads logs inside the kind nodes through the Docker socket (a node log agent's
 # view) and Kubernetes events with its own events-only token from data/kubeconfig-forwarder.yaml.
 # WatchTower's own containers never get the socket.
@@ -14,6 +14,23 @@ x-sim: &sim
   restart: unless-stopped
   sysctls: {net.ipv4.ip_unprivileged_port_start: 0}   # sims bind 22/161 as a non-root user
   volumes: [sims-state:/var/lib/wt-sims]
+
+x-agent: &agent
+  build: .
+  image: watchtower:dev
+  networks: [kind]
+  restart: unless-stopped
+  depends_on: [redis]
+  volumes: [wt-data:/var/lib/watchtower, ./data:/lab-data:ro]
+  extra_hosts: ["host.docker.internal:host-gateway"]      # Ollama runs natively on the Mac
+
+x-agent-env: &agent-env
+  WT_DB_PATH: /var/lib/watchtower/watchtower.db
+  WT_REDIS_URL: redis://redis:6379/0
+  WT_KUBECONFIG: /lab-data/kubeconfig-agent.yaml        # read-only wt-agent token, never the admin config
+  WT_LLM: ${WT_LLM:-on}
+  WT_LLM_BASE_URL: ${WT_LLM_BASE_URL:-http://host.docker.internal:11434/v1}
+  WT_AGENT_URLS: http://network-agent:8101,http://openshift-agent:8102,http://parent-agent:8103
 
 x-forwarder-volumes: &forwarder-volumes
   - sims-state:/var/lib/wt-sims
@@ -41,6 +58,19 @@ services:
             "127.0.0.1:8088:8088", "127.0.0.1:8089:8089", "127.0.0.1:17778:17778"]
     volumes: *forwarder-volumes
     mem_limit: 256m
+
+  wt-agents:
+    <<: *agent
+    profiles: [lite]
+    command: [python, -m, wt.run, network-agent, openshift-agent, parent-agent, copilot]
+    environment:
+      <<: *agent-env
+      WT_PROFILE: lite
+      WT_MODEL: ${WT_MODEL:-gemma3:1b}
+    networks:
+      kind: {aliases: [network-agent, openshift-agent, parent-agent, copilot]}
+    ports: ["127.0.0.1:8080:8080", "127.0.0.1:8101:8101", "127.0.0.1:8102:8102", "127.0.0.1:8103:8103"]
+    mem_limit: 384m
 
   # ---------------------------------------------------------------- full: one container per sim
   cisco-sim-1:
@@ -87,9 +117,43 @@ services:
     volumes: *forwarder-volumes
     mem_limit: 96m
 
+  # ---------------------------------------------------------------- full: one container per agent
+  network-agent:
+    <<: *agent
+    profiles: [full]
+    command: [python, -m, wt.run, network-agent]
+    environment: {<<: *agent-env, WT_PROFILE: full, WT_MODEL: "${WT_MODEL:-gemma3:4b}"}
+    ports: ["127.0.0.1:8101:8101"]
+    mem_limit: 160m
+
+  openshift-agent:
+    <<: *agent
+    profiles: [full]
+    command: [python, -m, wt.run, openshift-agent]
+    environment: {<<: *agent-env, WT_PROFILE: full, WT_MODEL: "${WT_MODEL:-gemma3:4b}"}
+    ports: ["127.0.0.1:8102:8102"]
+    mem_limit: 192m
+
+  parent-agent:
+    <<: *agent
+    profiles: [full]
+    command: [python, -m, wt.run, parent-agent]
+    environment: {<<: *agent-env, WT_PROFILE: full, WT_MODEL: "${WT_MODEL:-gemma3:4b}"}
+    ports: ["127.0.0.1:8103:8103"]
+    mem_limit: 192m
+
+  copilot:
+    <<: *agent
+    profiles: [full]
+    command: [python, -m, wt.run, copilot]
+    environment: {<<: *agent-env, WT_PROFILE: full, WT_MODEL: "${WT_MODEL:-gemma3:4b}"}
+    ports: ["127.0.0.1:8080:8080"]
+    mem_limit: 192m
+
 networks:
   kind:
     external: true
 
 volumes:
   sims-state:
+  wt-data:

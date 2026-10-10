@@ -17,9 +17,12 @@ description: Bring the WatchTower Mac lab (kind HA "ocp-sim" cluster, svc-prober
    `kubectl --context kind-ocp-sim apply -k lab/k8s/` (metrics-server with `--kubelet-insecure-tls`,
    demo app, svc-prober DaemonSet on every node, read-only RBAC for the agents), waits for
    Ready, and writes the agents' read-only kubeconfig to `data/kubeconfig-agent.yaml`.
-3. `docker compose --profile $WT_PROFILE up -d --build`: redis plus the simulators and stand-ins
+3. `docker compose --profile $WT_PROFILE up -d --build`: redis, the simulators and stand-ins
    (lite: one `wt-sims` container running cisco-sim-1, splunk-sim, solarwinds-sim and the
-   forwarder; full: one container each, plus cisco-sim-2). State (splunk-sim events,
+   forwarder; full: one container each, plus cisco-sim-2), and WatchTower itself (lite: one
+   `wt-agents` container running the Network, OpenShift and Parent agents and the Copilot on
+   http://localhost:8080; full: one container each). Agents use `data/kubeconfig-agent.yaml`
+   (read-only) and Ollama on the Mac (`WT_LLM=off make up` runs without the model). State (splunk-sim events,
    solarwinds-sim history, forwarder checkpoints) lives in the `sims-state` volume; `make down`
    removes it.
 4. The forwarder needs `data/kubeconfig-forwarder.yaml` (events-only `splunk-forwarder` token,
@@ -58,6 +61,7 @@ down, node down; history in `Orion.AlertHistory`.
 - `ssh -p 2221 admin@localhost "show interfaces Gi1/0/13"` (password `demo`) returns IOS-style text;
   SNMP on 1611/udp answers (`snmpget -v2c -c public localhost:1611 IF-MIB::ifOutDiscards.13`).
 - No `netem` qdisc on any node.
+- Agents answer `/health` on :8101 (network), :8102 (openshift), :8103 (parent); the Copilot on :8080.
 - `curl -s localhost:11434/api/tags` lists `WT_MODEL` (a warning only: `WT_LLM=off` works without it).
 
 ## The fault
@@ -75,7 +79,10 @@ master 2 and keeps both halves in step:
 go to `data/faults/last.jsonl`. `make verify-flap` runs the investigate fault and checks the
 flap end to end (NotReady then Ready, no Rebooted/Starting event, no evictions, svc-prober
 timeouts per phase, no splunk-sim or solarwinds-sim alert during phase A). Then
-`make verify-sources` runs every SPL/SWQL template in `contracts/sources.yaml` against the stand-ins. Measured on the lite lab: NotReady about 45 s into the burst, Ready again
+`make verify-sources` runs every SPL/SWQL template in `contracts/sources.yaml` against the stand-ins.
+`make verify-watch` checks the phase A watch signals (5 min); `make verify-copilot` runs the
+full fault through the Copilot (proactive watch item, then Investigate on the Splunk alert) and
+saves screenshots to docs/screenshots/. Measured on the lite lab: NotReady about 45 s into the burst, Ready again
 about 45 s after it ends (the kubelet has to drop its dead HTTP/2 connection first).
 The switch sim models congestion as rising output drops with **zero CRC**, average utilisation
 near 46%, and drops concentrated in one egress queue.
