@@ -1,0 +1,49 @@
+# Investigation playbook: output drops rising on a switch port (proactive watch or a
+# SolarWinds alert). Finds out what the port feeds and whether anything downstream suffers.
+id: network-port-congestion
+title: Output drops rising on a switch port
+triggers:
+  - signal: net.output_drops_rising
+  - alarm: {tool: solarwinds, name: "Interface discards"}
+scope: {switch: "{switch}", port: "{port}", window: "-60m to now"}
+
+facts:
+  - {id: f_downstream, from: topology, record: "what the port connects to"}
+  - {id: f_util,       ask: network, signal: interface_utilisation, record: "average and peak utilisation"}
+  - {id: f_alarms,     ask: network, signal: active_alerts, record: "any existing alarms"}
+
+hypotheses:
+  - id: H1
+    key: microburst_congestion
+    statement: Bursty traffic overflows the egress queue while average utilisation looks normal
+    expect:
+      - {ev: drops_rising, signal: interface_discards, predicate: "OutDiscards rising", weight: 2}
+      - {ev: util_normal,  signal: interface_utilisation, predicate: "average < 70%", weight: 1}
+      - {ev: queue_drops,  signal: queue_drops, needs_live: true, predicate: "drops in one queue", weight: 2}
+      - {ev: no_crc,       signal: interface_discards, predicate: "errors flat", weight: 1}
+    escalate_to: network
+  - id: H2
+    key: link_fault
+    statement: Physical link fault (cable, optic)
+    expect:
+      - {ev: crc_rising, signal: interface_discards, predicate: "InErrors rising", weight: 2}
+      - {ev: link_flaps, signal: switch_syslog, predicate: "%LINK-3-UPDOWN for the port", weight: 2}
+    escalate_to: network
+  - id: H3
+    key: sustained_overload
+    statement: Port is simply saturated
+    expect:
+      - {ev: util_high, signal: interface_utilisation, predicate: "average > 85%", weight: 3}
+    escalate_to: network
+
+cross_domain:
+  # If the port feeds an OpenShift node, ask the OpenShift Agent whether the node is suffering.
+  - if_downstream_kind: ocp_node
+    ask: openshift
+    signals: [api_svc_timeouts, lease_update_failures, node_ready_events]
+    then_consider_playbook: ocp-node-flap
+
+actions:
+  queue_stats: {step: "Per-queue drops", command: "show platform hardware fed switch active qos queue stats interface {port}"}
+  top_talkers: {step: "Top talkers on the port (NetFlow or SPAN by the network team)"}
+  policy_check: {step: "Review the egress QoS policy on the port", command: "show policy-map interface {port} output"}

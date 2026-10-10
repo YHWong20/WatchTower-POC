@@ -1,0 +1,26 @@
+# kind cluster that stands in for an OpenShift cluster: 3 masters (HA control plane) + 1 worker.
+# Three API servers matter: the kubernetes Service (10.96.0.1 here, 172.30.0.1 on OpenShift)
+# load-balances across all of them, so a master calling "itself" through the Service usually
+# leaves the node and crosses the switch. That is the path the real incident broke on.
+# Create with: kind create cluster --name ocp-sim --config lab/kind-config.yaml
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+networking:
+  serviceSubnet: 10.96.0.0/16
+nodes:
+  - role: control-plane          # ocp-sim-control-plane   -> master-1
+    labels: {wt/role: master, wt/name: master-1}
+  - role: control-plane          # ocp-sim-control-plane2  -> master-2 (fault target)
+    labels: {wt/role: master, wt/name: master-2}
+  - role: control-plane          # ocp-sim-control-plane3  -> master-3
+    labels: {wt/role: master, wt/name: master-3}
+  - role: worker                 # ocp-sim-worker          -> worker-1
+    labels: {wt/role: worker, wt/name: worker-1}
+# Optional, to mirror OpenShift's default timings exactly (kind's defaults are already
+# 10 s status updates and a 40 s grace period):
+# kubeadmConfigPatches:
+#   - |
+#     kind: ClusterConfiguration
+#     controllerManager:
+#       extraArgs:
+#         node-monitor-grace-period: "40s"

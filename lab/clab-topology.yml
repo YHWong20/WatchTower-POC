@@ -1,0 +1,20 @@
+# STRETCH GOAL ONLY. Real routing daemons for link-flap and adjacency-loss scenarios.
+# Runs on Apple Silicon because FRR images are native arm64.
+# On macOS run containerlab inside OrbStack's Linux machine or the containerlab devcontainer
+# (see https://containerlab.dev/macos/). Cisco images (IOL, IOSv, CSR) are x86 VMs and need
+# an Intel host, or an M3+ Mac on macOS 15+ with nested virtualisation.
+name: wt-net
+topology:
+  kinds:
+    linux:
+      image: quay.io/frrouting/frr:10.1.1
+  nodes:
+    core1: {kind: linux, binds: [frr/core1:/etc/frr]}
+    acc1:  {kind: linux, binds: [frr/acc1:/etc/frr]}
+    acc2:  {kind: linux, binds: [frr/acc2:/etc/frr]}
+  links:
+    - endpoints: ["core1:eth1", "acc1:eth1"]
+    - endpoints: ["core1:eth2", "acc2:eth1"]
+    - endpoints: ["acc1:eth2", "acc2:eth2"]
+# Fault ideas: `docker exec clab-wt-net-acc1 ip link set eth1 down` (link down),
+# `tc qdisc add dev eth1 root netem loss 20%` (OSPF/BGP adjacency flaps).

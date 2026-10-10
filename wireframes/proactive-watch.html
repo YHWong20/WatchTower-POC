@@ -1,0 +1,51 @@
+<!doctype html><html><head><meta charset="utf-8"><title>WatchTower wireframe: proactive watch</title><link rel="stylesheet" href="wf.css"></head><body>
+<div class="top"><span class="logo">◉ WatchTower</span><span class="sub">Copilot · Proactive watch</span><span class="sp"></span>
+<span class="pill p-out">Reading: SolarWinds ● Splunk ●</span><span class="pill p-out">Gemma (on-prem) ● online</span><span class="sub">02:09:40</span></div>
+<div class="wrap" style="grid-template-columns:320px 1fr 340px">
+ <div class="card" style="height:806px">
+  <h3>Alarms from existing tools</h3>
+  <div class="row"><span class="src s-spl">SPLUNK</span><div><b>No active alarms</b><div class="muted small">Last alert: 3 days ago</div></div></div>
+  <div class="row"><span class="src s-sw">SOLARWINDS</span><div><b>No active alarms</b><div class="muted small">Gi1/0/11 utilisation 46% (alert at 90%)</div></div></div>
+  <div class="muted small" style="margin:12px 0 6px;line-height:1.45">The existing tools see nothing wrong yet: every signal is below its threshold. WatchTower is watching for weak signals across domains.</div>
+  <h3 style="margin-top:18px">Domain agents</h3>
+  <div class="row"><div style="flex:1"><b>Network Agent</b><div class="muted small">2 switches · SolarWinds + Splunk</div></div><span class="pill p-amb">1 signal</span></div>
+  <div class="row"><div style="flex:1"><b>OpenShift Agent</b><div class="muted small">ocp-prod · Splunk</div></div><span class="pill p-amb">2 signals</span></div>
+  <div class="row"><div style="flex:1"><b>Parent Agent</b><div class="muted small">1 cross-domain watch item</div></div><span class="pill p-grn">active</span></div>
+  <h3 style="margin-top:18px">Ask WatchTower</h3>
+  <div style="background:#EEF3F6;border-radius:8px;padding:9px;font-size:12.5px;line-height:1.45"><b>SRE:</b> Is anything else on cisco-sim-1 dropping?<br><b>WatchTower:</b> No. Only Gi1/0/11 shows rising output drops; the other 47 ports are flat (SolarWinds, last 30 min).</div>
+  <div style="border:1.5px solid #9FB3C1;border-radius:8px;padding:8px;color:#5B6B7A;margin-top:8px">Ask, or say "investigate …"</div>
+ </div>
+ <div class="card" style="height:806px">
+  <h3>Watch items · weak signals WatchTower is tracking</h3>
+  <div style="border:1.5px solid #E89B2C;border-radius:10px;padding:13px 14px">
+   <div style="display:flex;gap:10px;align-items:center"><span class="pill p-amb">EMERGING · cross-domain</span><span class="muted small">updated 02:09 · 100% reused, 0 probes</span><span class="sp"></span><span class="small"><b>Confidence: medium (0.61)</b></span></div>
+   <div style="font-size:17px;font-weight:bold;margin:9px 0 4px">API calls from master-2 are timing out while its switch port starts dropping packets</div>
+   <div class="muted" style="font-size:13px">No service impact yet. If this grows, master-2 may miss its 40 s heartbeat window and be marked NotReady.</div>
+   <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px">
+    <div class="card" style="padding:9px"><span class="src s-spl">SPLUNK</span><b class="small">OpenShift Agent</b><div class="small" style="margin-top:4px">41 × <span class="k">dial tcp 172.30.0.1:443: i/o timeout</span> from master-2 in 10 min (baseline 0)</div><div class="ph" style="height:30px;margin-top:6px">sparkline</div></div>
+    <div class="card" style="padding:9px"><span class="src s-sw">SOLARWINDS</span><b class="small">Network Agent</b><div class="small" style="margin-top:4px">Output drops on cisco-sim-1 <span class="k">Gi1/0/11</span> rising 6 polls in a row; utilisation average 46%</div><div class="ph" style="height:30px;margin-top:6px">sparkline</div></div>
+    <div class="card" style="padding:9px"><span class="src s-spl">SPLUNK</span><b class="small">OpenShift Agent</b><div class="small" style="margin-top:4px">kubelet on master-2: 3 × <span class="k">failed to update lease</span>; etcd peer latency warnings</div></div>
+    <div class="card" style="padding:9px"><span class="src s-wt">CORRELATION</span><b class="small">Parent Agent</b><div class="small" style="margin-top:4px">Topology: <span class="k">Gi1/0/11</span> feeds master-2. All three signals started within 2 minutes.</div></div>
+   </div>
+   <div style="margin-top:10px"><span class="btn pri">Open investigation</span><span class="btn">Explain in plain words</span><span class="btn">Not relevant</span></div>
+  </div>
+  <div style="border:1.5px solid #D5DEE5;border-radius:10px;padding:12px 14px;margin-top:12px">
+   <div style="display:flex;gap:10px;align-items:center"><span class="pill" style="background:#EEF3F6;color:#5B6B7A">WATCHING · single domain</span><span class="sp"></span><span class="small muted">Confidence: low (0.22)</span></div>
+   <div style="font-size:15px;font-weight:bold;margin:7px 0 3px">cisco-sim-2 uplink utilisation creeping up during the backup window</div>
+   <div class="muted small">+3% per night over 5 nights · no drops · not linked to any OpenShift signal</div>
+  </div>
+  <div class="card" style="margin-top:12px"><h3>Signals over the last hour</h3><div class="ph" style="height:140px">timeline: i/o timeouts (Splunk) · output drops (SolarWinds) · lease failures (Splunk), on one time axis</div></div>
+ </div>
+ <div class="card" style="height:806px">
+  <h3>What happens next</h3>
+  <div class="small" style="line-height:1.5">WatchTower keeps watching. If confidence passes 0.7 or a node changes state, the Parent Agent opens an investigation and notifies the on-shift SRE.</div>
+  <h3 style="margin-top:18px">Suggested now (read-only)</h3>
+  <div class="row"><b>1</b><div>Check queue drops on <span class="k">Gi1/0/11</span><pre>show platform hardware fed switch active qos queue stats interface Gi1/0/11</pre></div></div>
+  <div class="row"><b>2</b><div>Check master-2 lease renewals<pre>oc get lease master-2 -n kube-node-lease -o yaml</pre></div></div>
+  <div class="row"><b>3</b><div>No escalation yet. Give the network team a heads-up if drops keep rising for 10 more minutes.</div></div>
+  <div class="muted small" style="margin-top:10px">WatchTower changes nothing. These are suggestions for the SRE.</div>
+ </div>
+</div>
+<div class="note" style="left:1100px;top:640px">Every signal shows its source: reused from Splunk or SolarWinds, or a live probe</div>
+<div class="note" style="left:40px;top:790px;max-width:270px">Existing alarms stay quiet because each signal is below its threshold</div>
+</body></html>

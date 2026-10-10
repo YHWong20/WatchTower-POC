@@ -1,0 +1,16 @@
+# Lite profile for an 8 GB MacBook Air (WT_PROFILE=lite): 1 master + 1 worker.
+# Fault target is the worker: its kubelet and its pods reach the API only across the switch,
+# so congesting its port reproduces the same mechanism as the real incident (API calls time
+# out, lease renewals missed for > 40 s, transient NotReady, no reboot). What the lite lab
+# cannot show is the master-specific "2 in 3 calls" pattern, which needs three API servers;
+# that part is carried by the slides, the wireframes and the recorded replay.
+# Create with: kind create cluster --name ocp-sim --config lab/kind-config-lite.yaml
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+networking:
+  serviceSubnet: 10.96.0.0/16
+nodes:
+  - role: control-plane          # ocp-sim-control-plane -> master-1
+    labels: {wt/role: master, wt/name: master-1}
+  - role: worker                 # ocp-sim-worker        -> worker-1 (fault target, cisco-sim-1 Gi1/0/13)
+    labels: {wt/role: worker, wt/name: worker-1}

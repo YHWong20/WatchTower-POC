@@ -1,0 +1,20 @@
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"Liberation Sans",Arial,Helvetica,sans-serif;background:#F4F6F8;color:#12263A;width:1440px;height:900px;overflow:hidden;font-size:14px;position:relative}
+.top{height:54px;background:#12263A;color:#fff;display:flex;align-items:center;padding:0 22px;gap:16px}
+.logo{font-weight:bold;font-size:19px}.sub{color:#CFE3EA;font-size:13px}
+.pill{border-radius:14px;padding:4px 11px;font-size:12px;font-weight:bold}
+.p-out{border:1px solid #9FB3C1;color:#CFE3EA}.p-grn{background:#0E9F8E;color:#fff}.p-amb{background:#E89B2C;color:#fff}.p-red{background:#D9534F;color:#fff}
+.sp{flex:1}.muted{color:#5B6B7A}.small{font-size:12px}
+.wrap{padding:16px 22px;display:grid;gap:14px}
+.card{background:#fff;border:1.5px solid #D5DEE5;border-radius:10px;padding:13px 15px}
+h3{font-size:12px;letter-spacing:1px;color:#5B6B7A;margin-bottom:10px;text-transform:uppercase}
+.src{display:inline-block;border-radius:5px;padding:1px 6px;font-size:10.5px;font-weight:bold;color:#fff;margin-right:5px;vertical-align:1px;white-space:nowrap}
+.s-spl{background:#1F4E6B}.s-sw{background:#5B6B7A}.s-cli{background:#E89B2C}.s-api{background:#E89B2C}.s-wt{background:#0E9F8E}
+.btn{display:inline-block;text-align:center;border:1.5px solid #12263A;border-radius:7px;padding:5px 10px;font-size:12px;font-weight:bold;margin:6px 6px 0 0}
+.btn.pri{background:#12263A;color:#fff}
+.ph{background:repeating-linear-gradient(45deg,#EEF3F6,#EEF3F6 7px,#E3EAEF 7px,#E3EAEF 14px);border-radius:6px;display:flex;align-items:center;justify-content:center;color:#5B6B7A;font-size:11px;text-align:center;padding:0 10px}
+.note{position:absolute;background:#FFF4D6;border:1px dashed #E89B2C;color:#7A5200;font-size:11.5px;padding:5px 8px;border-radius:6px;max-width:230px;line-height:1.35}
+.row{display:flex;gap:8px;align-items:flex-start;padding:7px 0;border-bottom:1px solid #EEF3F6;font-size:12.5px;line-height:1.4}
+.bar{height:8px;border-radius:4px;background:#EEF3F6;margin-top:5px;overflow:hidden}.bar i{display:block;height:8px}
+pre{font-family:"Liberation Mono",monospace;font-size:10.5px;background:#12263A;color:#CFE3EA;padding:6px 8px;border-radius:6px;margin-top:4px;white-space:pre-wrap}
+.k{font-family:"Liberation Mono",monospace;font-size:11px;background:#EEF3F6;padding:1px 4px;border-radius:4px}

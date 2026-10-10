@@ -1,0 +1,36 @@
+# Who WatchTower recommends escalating to, and at what priority. WatchTower only recommends;
+# the SRE raises the ticket. Edit to match the real on-call structure.
+teams:
+  network:  {name: "Network team",  owns: [cisco switching, routing, QoS]}
+  platform: {name: "Platform team", owns: [OpenShift control plane, nodes, etcd, SDN/OVN]}
+  sre_lead: {name: "SRE shift lead", owns: [coordination, P1/P2 bridge]}
+
+priority_rules:            # evaluated top to bottom; first match wins
+  - if: "service outage or more than one master NotReady"
+    priority: P1
+    teams: [platform, network, sre_lead]
+  - if: "a master flapped NotReady more than once in 60 min, or NotReady > 300 s (eviction risk)"
+    priority: P2
+  - if: "single NotReady flap, recovered, underlying cause still present"
+    priority: P3
+  - if: "cause cleared, no recurrence in 30 min"
+    priority: P4
+  - if: "proactive watch item, no impact yet"
+    priority: heads_up
+
+route_by_top_hypothesis:
+  network_path_congestion: network
+  link_fault: network
+  sdn_datapath_fault: platform
+  etcd_slow_disk: platform
+  node_resource_starvation: platform
+  api_server_overload: platform
+
+evidence_pack:             # attached to the escalation note the Copilot drafts
+  - timeline (first weak signal to now)
+  - likely cause, confidence and the hypotheses ruled out
+  - Splunk searches used (SPL) with counts
+  - SolarWinds queries used (SWQL) with values
+  - probe commands and outputs (read-only)
+  - recommended next diagnostic steps
+  - investigation id and link

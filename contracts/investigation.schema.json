@@ -1,0 +1,413 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Investigation",
+  "description": "The evidence chain the Parent Agent produces. Every conclusion is traceable: observation -> evidence -> correlation -> hypothesis -> confidence -> recommended actions. Read-only: actions are diagnostic steps and escalation only.",
+  "type": "object",
+  "required": [
+    "id",
+    "opened_at",
+    "trigger",
+    "playbook",
+    "observations",
+    "evidence",
+    "correlations",
+    "hypotheses",
+    "conclusion",
+    "recommended_actions",
+    "escalation",
+    "llm_used",
+    "reuse"
+  ],
+  "$defs": {
+    "ref": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^(obs|ev|cor)-[0-9]+$"
+      },
+      "minItems": 1
+    }
+  },
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^INV-[0-9]{4}$"
+    },
+    "opened_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "trigger": {
+      "type": "object",
+      "required": [
+        "mode"
+      ],
+      "properties": {
+        "mode": {
+          "enum": [
+            "proactive_watch",
+            "incident_investigation"
+          ]
+        },
+        "watch_item_id": {
+          "type": "string"
+        },
+        "alarm": {
+          "type": "object",
+          "description": "Alarm from Splunk or SolarWinds, if an SRE asked",
+          "properties": {
+            "tool": {
+              "enum": [
+                "splunk",
+                "solarwinds"
+              ]
+            },
+            "name": {
+              "type": "string"
+            },
+            "entity": {
+              "type": "string"
+            },
+            "fired_at": {
+              "type": "string"
+            }
+          }
+        },
+        "requested_by": {
+          "type": "string"
+        }
+      }
+    },
+    "playbook": {
+      "type": "string",
+      "description": "e.g. ocp-node-flap"
+    },
+    "observations": {
+      "type": "array",
+      "description": "What was seen, from signals and alarms",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "text",
+          "signal_ids"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^obs-[0-9]+$"
+          },
+          "text": {
+            "type": "string"
+          },
+          "signal_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "domain",
+          "source",
+          "query",
+          "collected_at",
+          "excerpt",
+          "finding"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^ev-[0-9]+$"
+          },
+          "domain": {
+            "enum": [
+              "network",
+              "openshift"
+            ]
+          },
+          "source": {
+            "enum": [
+              "splunk",
+              "solarwinds",
+              "probe_cli",
+              "probe_k8s_api"
+            ]
+          },
+          "query": {
+            "type": "string"
+          },
+          "reason_for_probe": {
+            "type": "string"
+          },
+          "collected_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "excerpt": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "finding": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "interpreted_by": {
+            "enum": [
+              "rule",
+              "llm"
+            ]
+          }
+        }
+      }
+    },
+    "correlations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "text",
+          "refs"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^cor-[0-9]+$"
+          },
+          "kind": {
+            "enum": [
+              "topology",
+              "time",
+              "topology+time"
+            ]
+          },
+          "text": {
+            "type": "string"
+          },
+          "refs": {
+            "$ref": "#/$defs/ref"
+          }
+        }
+      }
+    },
+    "hypotheses": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "statement",
+          "proposed_by",
+          "supporting",
+          "refuting",
+          "missing",
+          "confidence"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^H[0-9]+$"
+          },
+          "statement": {
+            "type": "string"
+          },
+          "proposed_by": {
+            "enum": [
+              "playbook",
+              "llm"
+            ]
+          },
+          "supporting": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "refuting": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "missing": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Expected evidence not yet collected"
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "confidence_rule": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Deterministic score before any LLM adjustment"
+          },
+          "llm_adjustment": {
+            "type": "object",
+            "properties": {
+              "delta": {
+                "type": "number",
+                "minimum": -0.1,
+                "maximum": 0.1
+              },
+              "reason": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "conclusion": {
+      "type": "object",
+      "required": [
+        "likely_cause",
+        "what_happened",
+        "confidence_label",
+        "refs"
+      ],
+      "properties": {
+        "likely_cause": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "what_happened": {
+          "type": "string",
+          "maxLength": 800,
+          "description": "Plain-words account, e.g. transient NotReady, no reboot, no eviction"
+        },
+        "confidence_label": {
+          "enum": [
+            "low",
+            "medium",
+            "high"
+          ]
+        },
+        "unknowns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "refs": {
+          "$ref": "#/$defs/ref"
+        }
+      }
+    },
+    "recommended_actions": {
+      "type": "array",
+      "description": "Read-only diagnostic steps only. No remediation, no config changes.",
+      "items": {
+        "type": "object",
+        "required": [
+          "step",
+          "why",
+          "kind"
+        ],
+        "properties": {
+          "step": {
+            "type": "string"
+          },
+          "command": {
+            "type": "string"
+          },
+          "why": {
+            "type": "string"
+          },
+          "kind": {
+            "const": "diagnostic"
+          },
+          "from_catalogue": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "escalation": {
+      "type": "object",
+      "required": [
+        "team",
+        "priority",
+        "reason"
+      ],
+      "properties": {
+        "team": {
+          "type": "string"
+        },
+        "priority": {
+          "enum": [
+            "none",
+            "heads_up",
+            "P4",
+            "P3",
+            "P2",
+            "P1"
+          ]
+        },
+        "reason": {
+          "type": "string"
+        },
+        "raise_if": {
+          "type": "string"
+        },
+        "note_markdown": {
+          "type": "string"
+        }
+      }
+    },
+    "llm_used": {
+      "type": "boolean"
+    },
+    "audit_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "reuse": {
+      "type": "object",
+      "description": "How much of the evidence came from existing tools. Reuse first, probe second: target >= 0.85.",
+      "required": [
+        "reused",
+        "probed",
+        "rate"
+      ],
+      "properties": {
+        "reused": {
+          "type": "integer",
+          "description": "Evidence items from Splunk or SolarWinds"
+        },
+        "probed": {
+          "type": "integer",
+          "description": "Evidence items from live CLI or API probes"
+        },
+        "rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "probe_reasons": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

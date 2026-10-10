@@ -1,0 +1,46 @@
+<!doctype html><html><head><meta charset="utf-8"><title>WatchTower wireframe: incident investigation</title><link rel="stylesheet" href="wf.css"></head><body>
+<div class="top"><span class="logo">◉ WatchTower</span><span class="sub">Copilot · Investigation INV-0012</span><span class="sp"></span><span class="pill p-out">Gemma (on-prem) ● online</span><span class="pill p-out">Read-only</span></div>
+<div class="wrap">
+ <div class="card" style="display:grid;grid-template-columns:1fr 260px;gap:14px">
+  <div>
+   <div class="muted small"><b>SRE (night shift), 02:16:</b> "Splunk alert: master-2 NotReady at 02:14, back at 02:15. Investigate."</div>
+   <div style="font-size:18px;font-weight:bold;margin:7px 0 5px">Likely cause: congestion on master-2's switch port delayed its API calls, so it missed heartbeats for 47 s and was marked NotReady</div>
+   <div class="small" style="line-height:1.45">It recovered without a reboot (no Rebooted or Starting events for master-2), and its API server and etcd did not restart (no restart events). Pods were not evicted: NotReady lasted 47 s, and eviction starts at 300 s.</div>
+  </div>
+  <div style="text-align:right"><div class="pill p-red" style="display:inline-block">CONFIDENCE: HIGH 0.82</div><div class="small muted" style="margin-top:6px">2 domains · 11 of 12 evidence items reused<br>Splunk + SolarWinds · 1 live probe</div><span class="btn pri" style="margin-top:10px">Copy escalation note</span><span class="btn">Ask about this</span></div>
+ </div>
+ <div style="display:grid;grid-template-columns:480px 1fr 390px;gap:14px">
+  <div class="card" style="height:650px">
+   <h3>Evidence chain</h3>
+   <div class="row"><span class="src s-spl">SPLUNK</span><div><b>Observation:</b> 128 × <span class="k">172.30.0.1:443 i/o timeout</span> from master-2, 02:03–02:15; about 2 in 3 calls failed</div></div>
+   <div class="row"><span class="src s-spl">SPLUNK</span><div><b>Observation:</b> kubelet <span class="k">failed to update lease</span> ×6, then NodeNotReady 02:14:08, Ready 02:14:55</div></div>
+   <div class="row"><span class="src s-sw">SOLARWINDS</span><div><b>Evidence:</b> Gi1/0/11 output drops 0 → 2,914 per poll since 02:02; utilisation average only 46%</div></div>
+   <div class="row"><span class="src s-sw">SOLARWINDS</span><div><b>Evidence:</b> CRC and input errors flat on Gi1/0/11: not a link fault</div></div>
+   <div class="row"><span class="src s-cli">PROBE · CLI</span><div><b>Evidence:</b> drops all in one egress queue: bursty traffic. <span class="muted">Probed because SolarWinds does not poll per-queue drops.</span></div></div>
+   <div class="row"><span class="src s-spl">SPLUNK</span><div><b>Evidence:</b> no Rebooted, Starting or pod restart events for master-2; no evictions; no pressure events</div></div>
+   <div class="row"><span class="src s-wt">TOPOLOGY</span><div><b>Correlation:</b> Gi1/0/11 feeds master-2. Drops started 1 min before the first timeout.</div></div>
+   <div class="row" style="border:none"><span class="src s-wt">WHY 2 IN 3</span><div>The kubernetes Service balances across all 3 API servers, so calls to the other two masters leave master-2 and cross the congested port.</div></div>
+  </div>
+  <div class="card" style="height:650px">
+   <h3>Hypotheses · node-flap playbook</h3>
+   <div class="row" style="display:block"><b>H1 Congestion on master-2's network path</b><div class="small muted">5 of 6 expected signals, none against</div><div class="bar"><i style="width:82%;background:#D9534F"></i></div></div>
+   <div class="row" style="display:block"><b>H2 SDN / OVN datapath fault on master-2</b><div class="small muted">against: only calls that leave the node fail</div><div class="bar"><i style="width:18%;background:#9FB3C1"></i></div></div>
+   <div class="row" style="display:block"><b>H3 etcd slow disk</b><div class="small muted">against: fsync normal; peer latency high instead</div><div class="bar"><i style="width:12%;background:#9FB3C1"></i></div></div>
+   <div class="row" style="display:block"><b>H4 Node resource starvation</b><div class="small muted">against: no pressure events; CPU 22% (SolarWinds)</div><div class="bar"><i style="width:6%;background:#9FB3C1"></i></div></div>
+   <h3 style="margin-top:16px">What happened</h3>
+   <div class="ph" style="height:140px">timeline 02:00–02:20: drops start 02:02 → timeouts 02:03 → lease failures 02:12 → NotReady 02:14:08 → Ready 02:14:55 → drops continue</div>
+   <div class="small muted" style="margin-top:8px">Still unknown: what traffic is filling Gi1/0/11.</div>
+  </div>
+  <div class="card" style="height:650px">
+   <h3>Recommended next steps (read-only)</h3>
+   <div class="row"><b>1</b><div>Find the top talkers towards master-2 (NetFlow or a switch capture) to see what fills the queue.</div></div>
+   <div class="row"><b>2</b><div>Confirm the queue drops by class<pre>show platform hardware fed switch active qos queue stats interface Gi1/0/11</pre></div></div>
+   <div class="row"><b>3</b><div>Watch master-2's lease renewals while drops continue<pre>oc get lease master-2 -n kube-node-lease -w</pre></div></div>
+   <h3 style="margin-top:14px">Escalation</h3>
+   <div style="border:1.5px solid #E89B2C;border-radius:8px;padding:10px;font-size:12.5px;line-height:1.45"><b>Network team · P3</b> (drops ongoing, one flap, no outage). Raise to P2 if master-2 flaps again.<br><span class="muted">The note includes the timeline, Gi1/0/11 counters, Splunk queries and probe outputs.</span></div>
+   <div class="muted small" style="margin-top:12px">WatchTower stops here. Any change is made by the network or platform team through change control.</div>
+  </div>
+ </div>
+</div>
+<div class="note" style="left:560px;top:820px;max-width:360px">Confidence comes from counting evidence for and against, not from the model's opinion</div>
+</body></html>

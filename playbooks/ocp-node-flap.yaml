@@ -1,0 +1,100 @@
+# Investigation playbook: an OpenShift node went NotReady and came back (a "node flap"),
+# or calls from a node to the API keep timing out. Deterministic scaffolding for the Parent
+# Agent; the LLM may add up to two hypotheses and interprets evidence without a predicate.
+id: ocp-node-flap
+title: Node flapped NotReady or API calls from a node time out
+triggers:
+  - signal: ocp.node_not_ready           # incident: Splunk NodeNotReady alert or event
+  - signal: ocp.api_svc_timeouts         # proactive: timeouts above baseline
+  - alarm: {tool: splunk, name: NodeNotReady}
+scope: {node: "{node}", window: "-30m to now"}
+
+background: |
+  The kubelet renews its node Lease every 10 s. If the control plane sees no renewal for
+  40 s (node-monitor-grace-period), the node is marked NotReady; pod eviction starts only
+  after 300 s. So a short gap gives NotReady then Ready with no reboot and no evictions.
+  The kubernetes Service balances across all API servers, so from a master most calls
+  "to itself" actually leave the node; failures on 2 of 3 backends point to the network path.
+
+# Reuse first: every fact and every expected item below is answered from Splunk or SolarWinds.
+# The only live probe is per-queue drops on the switch (not polled by SolarWinds).
+# Always collected first, to describe what happened before explaining why.
+facts:
+  - {id: f_flap,     ask: openshift, signal: node_ready_events,    record: "NotReady and Ready times, duration"}
+  - {id: f_reboot,   ask: openshift, signal: node_reboot_check,    record: "Rebooted / Starting events present? (Splunk)"}
+  - {id: f_restarts, ask: openshift, signal: static_pod_restarts,  record: "API server / etcd restart events (Splunk)"}
+  - {id: f_evict,    ask: openshift, signal: pod_evictions,        record: "evictions (Splunk)"}
+
+hypotheses:
+  - id: H1
+    key: network_path_congestion
+    statement: Congestion on the node's switch path delays API traffic and lease renewals
+    expect:
+      - {ev: api_timeouts_partial, ask: openshift, signal: api_svc_timeouts, predicate: "timeouts > 0 and success_rate between 0.2 and 0.8", weight: 2}
+      - {ev: lease_failures,      ask: openshift, signal: lease_update_failures, predicate: "count >= 2", weight: 1}
+      - {ev: port_drops_rising,   ask: network,   signal: interface_discards, on: "topology.port_of({node})", predicate: "OutDiscards rising >= 3 polls", weight: 2}
+      - {ev: drops_ongoing,       ask: network,   signal: interface_discards, predicate: "OutDiscards still rising in the latest 2 polls", weight: 1}
+      - {ev: queue_drops,         ask: network,   signal: queue_drops, needs_live: true, predicate: "drops concentrated in one egress queue", weight: 1}
+      - {ev: no_crc,              ask: network,   signal: interface_discards, predicate: "InErrors and OutErrors flat", weight: 1}
+    refute:
+      - {ev: crc_rising, predicate: "CRC/InErrors rising", weight: 2, points_to: link_fault}
+    actions_catalogue: [top_talkers, queue_stats, lease_watch, check_peer_ports]
+    escalate_to: network
+
+  - id: H2
+    key: sdn_datapath_fault
+    statement: OVN/SDN datapath fault on the node
+    expect:
+      - {ev: local_also_fails, ask: openshift, predicate: "calls to the local API server endpoint also time out", weight: 2}
+      - {ev: ovn_errors,       ask: openshift, signal: ovn_errors, predicate: "count > 10", weight: 2}
+    refute:
+      - {ev: api_timeouts_partial, predicate: "only calls that leave the node fail", weight: 2}
+    escalate_to: platform
+
+  - id: H3
+    key: etcd_slow_disk
+    statement: Slow disk on the node delays etcd and the API server
+    expect:
+      - {ev: etcd_fsync, ask: openshift, signal: etcd_latency, predicate: "'slow fdatasync' count > 0", weight: 2}
+    refute:
+      - {ev: etcd_peer_only, predicate: "only peer/round-trip warnings, no fsync warnings", weight: 1}
+    escalate_to: platform
+
+  - id: H4
+    key: node_resource_starvation
+    statement: CPU or memory starvation on the node stalls the kubelet
+    expect:
+      - {ev: node_pressure, ask: openshift, signal: node_pressure, predicate: "any pressure or SystemOOM event", weight: 2}
+      - {ev: node_cpu_high, ask: openshift, signal: node_cpu_memory, predicate: "CPU > 90% (if the node is in SolarWinds)", weight: 1}
+    refute:
+      - {ev: node_healthy, predicate: "no pressure events, and CPU < 60% where SolarWinds has it", weight: 2}
+    escalate_to: platform
+
+  - id: H5
+    key: api_server_overload
+    optional: true
+    statement: API servers overloaded (all nodes affected, not one)
+    expect:
+      - {ev: all_nodes_timeouts, ask: openshift, predicate: "timeouts from every master", weight: 2}
+    refute:
+      - {ev: one_node_only, predicate: "only {node} sees timeouts", weight: 2}
+    escalate_to: platform
+
+confidence:
+  formula: "clip((sum(weight supporting) - sum(weight refuting)) / sum(weight expected), 0, 1)"
+  llm_adjust_max: 0.10
+  labels: {low: "< 0.4", medium: "0.4 - 0.7", high: ">= 0.7"}
+
+actions:                     # read-only diagnostic steps the LLM may choose from
+  top_talkers:  {step: "Find top talkers towards {node} (NetFlow, or a SPAN capture by the network team)"}
+  queue_stats:  {step: "Confirm queue drops by class", command: "show platform hardware fed switch active qos queue stats interface {port}"}
+  lease_watch:  {step: "Watch the node's lease renewals while drops continue", command: "oc get lease {node} -n kube-node-lease -w"}
+  check_peer_ports: {step: "Compare drops on the other masters' ports", command: "show interfaces {peer_ports} | include drops"}
+  node_journal: {step: "Read the kubelet journal around the flap", command: "oc adm node-logs {node} -u kubelet --since=-30m"}
+  etcd_health:  {step: "Check etcd member health and latency", command: "oc -n openshift-etcd rsh <etcd-pod> etcdctl endpoint status -w table"}
+
+explain_template: |
+  Likely cause: {top.statement} ({confidence_label}, {confidence}).
+  What happened: {node} missed lease renewals for {gap_s} s and was marked NotReady at
+  {not_ready_at}, Ready again at {ready_at}. {reboot_sentence} {restart_sentence}
+  {eviction_sentence}

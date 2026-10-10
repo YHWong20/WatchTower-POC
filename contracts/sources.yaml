@@ -1,0 +1,99 @@
+# Reuse first, probe second. The rulebook every agent follows before touching a device.
+#  - Splunk is the primary source for logs and events.
+#  - SolarWinds is the primary source for interface and device metrics.
+#  - Probes (CLI over SSH, Kubernetes API) only when live state or deeper evidence is needed,
+#    and never to re-collect something Splunk or SolarWinds already ingests on a schedule.
+# Query templates use {placeholders}. PoC endpoints are the stand-ins in sims/.
+tools:
+  splunk:     {api: "https://splunk:8089/services/search/jobs/export", lang: SPL, poc: splunk-sim}
+  solarwinds: {api: "https://solarwinds:17778/SolarWinds/InformationService/v3/Json/Query", lang: SWQL, poc: solarwinds-sim}
+  probe_cli:  {transport: ssh, allow: "^show ", poc: [cisco-sim-1, cisco-sim-2]}
+  probe_k8s_api: {transport: https, verbs: [get, list, watch], poc: kind ocp-sim}
+
+signals:
+  # ---------- OpenShift domain ----------
+  # Assumption (YH, 2026-10-09): OpenShift events go into Splunk. We also assume kubelet journal and
+  # control-plane container logs are forwarded (Splunk OTel Collector / Connect for Kubernetes ship
+  # both by default). Every OpenShift question below is answered from Splunk first.
+  api_svc_timeouts:
+    meaning: Calls from a node to the kubernetes Service VIP timing out
+    primary: splunk
+    query: 'index=ocp sourcetype=kube:container:svc-prober host={node} "i/o timeout" earliest=-{window} | timechart span=1m count'
+    prod_query: 'index=ocp host={node} "dial tcp 172.30.0.1:443" ("i/o timeout" OR "context deadline exceeded") earliest=-{window} | timechart span=1m count'
+  lease_update_failures:
+    primary: splunk
+    query: 'index=ocp sourcetype=kubelet host={node} ("failed to update lease" OR "error updating node status") earliest=-{window}'
+  node_ready_events:
+    primary: splunk
+    query: 'index=ocp sourcetype=kube:events reason IN (NodeNotReady, NodeReady) involvedObject.name={node} earliest=-{window}'
+    gives: NotReady and Ready times, so the gap length (vs. 40 s grace, 300 s eviction)
+  node_reboot_check:
+    primary: splunk
+    query: 'index=ocp sourcetype=kube:events involvedObject.name={node} reason IN (Rebooted, Starting) earliest=-{window}'
+    reading: The kubelet emits "Rebooted" (with the new boot id) when the boot ID changes and "Starting" when the kubelet restarts. Neither present = no reboot and no kubelet restart.
+    corroborate: 'index=ocp sourcetype=kubelet host={node} ("Starting kubelet" OR "Started Kubernetes Kubelet") earliest=-{window}'
+    probe_fallback: {tool: probe_k8s_api, call: "GET /api/v1/nodes/{node} -> status.nodeInfo.bootID", when: "only if the Splunk event stream has a gap covering the window"}
+  static_pod_restarts:
+    primary: splunk
+    query: 'index=ocp sourcetype=kube:events namespace IN (openshift-kube-apiserver, openshift-etcd, kube-system) source_host={node} reason IN (Killing, Started, BackOff, Unhealthy) earliest=-{window} | stats count by involvedObject.name, reason'
+    reading: No Killing/Started events for the API server or etcd pods on the node = they did not restart.
+    probe_fallback: {tool: probe_k8s_api, call: "GET pods on {node} -> restartCount", when: "only if events are missing for the window"}
+  pod_evictions:
+    primary: splunk
+    query: 'index=ocp sourcetype=kube:events reason IN (TaintManagerEviction, Evicted, Preempted) earliest=-{window}'
+  etcd_latency:
+    primary: splunk
+    query: 'index=ocp sourcetype=kube:container:etcd host={node} ("apply request took too long" OR "slow fdatasync" OR "prober detected unhealthy status") earliest=-{window} | stats count by msg'
+  ovn_errors:
+    primary: splunk
+    query: 'index=ocp sourcetype=kube:container:ovnkube* host={node} (error OR "connection refused") earliest=-{window} | stats count'
+  node_pressure:
+    primary: splunk
+    query: 'index=ocp sourcetype=kube:events involvedObject.name={node} reason IN (NodeHasInsufficientMemory, NodeHasDiskPressure, NodeHasInsufficientPID, SystemOOM) earliest=-{window}'
+  node_cpu_memory:
+    primary: solarwinds
+    query: "SELECT TOP 10 DateTime, AvgLoad, AvgPercentMemoryUsed FROM Orion.CPULoad WHERE Node.Caption = '{node}' ORDER BY DateTime DESC"
+    note: Only if the bare-metal node is a SolarWinds node (SNMP host resources or agent). Otherwise reuse existing cluster monitoring; probe the metrics API as a last resort.
+    probe_fallback: {tool: probe_k8s_api, call: "GET /apis/metrics.k8s.io/v1beta1/nodes/{node}", when: "node not in SolarWinds"}
+  lease_renew_live:
+    primary: probe_k8s_api
+    call: "GET /apis/coordination.k8s.io/v1/namespaces/kube-node-lease/leases/{node} -> spec.renewTime"
+    when: Never during diagnosis (lease failures are in Splunk). Offered to the SRE as a next step to watch it live.
+  # ---------- Network domain ----------
+  interface_discards:
+    primary: solarwinds
+    query: "SELECT DateTime, InDiscards, OutDiscards, InErrors, OutErrors FROM Orion.NPM.InterfaceErrors WHERE InterfaceID = {if_id} AND DateTime > ADDDATE('minute', -{minutes}, GETUTCDATE()) ORDER BY DateTime"
+  interface_utilisation:
+    primary: solarwinds
+    query: "SELECT DateTime, InAveragebps, OutAveragebps, InPercentUtil, OutPercentUtil FROM Orion.NPM.InterfaceTraffic WHERE InterfaceID = {if_id} AND DateTime > ADDDATE('minute', -{minutes}, GETUTCDATE())"
+  interface_lookup:
+    primary: solarwinds
+    query: "SELECT I.InterfaceID, I.Name, I.Status FROM Orion.NPM.Interfaces I WHERE I.Node.Caption = '{switch}' AND I.Name = '{port}'"
+  switch_syslog:
+    primary: splunk
+    query: 'index=network sourcetype=cisco:ios host={switch} ({port} OR "%LINK" OR "%LINEPROTO") earliest=-{window}'
+  active_alerts:
+    primary: [solarwinds, splunk]
+    query_solarwinds: "SELECT AlertActiveID, TriggeredDateTime, TriggeredMessage FROM Orion.AlertActive"
+    query_splunk: "/services/alerts/fired_alerts"
+  live_interface_counters:
+    primary: probe_cli
+    command: "show interfaces {port}"
+    when: "Only if the last SolarWinds poll is older than 2 min and the investigation needs to know drops are still rising right now."
+  queue_drops:
+    primary: probe_cli
+    command: "show platform hardware fed switch active qos queue stats interface {port}"
+    when: "Deeper evidence only: per-queue drops are not polled by SolarWinds (unless CBQoS polling is enabled, in which case reuse it). Confirms microburst congestion. The one probe the node-flap playbook expects."
+    reuse_if_available: "SolarWinds NTA/CBQoS: SELECT ... FROM Orion.Netflow.CBQoSStatistics WHERE InterfaceID = {if_id}"
+  error_counters:
+    primary: probe_cli
+    command: "show interfaces counters errors"
+    when: Only if SolarWinds error data is missing for the port.
+
+probe_policy:
+  # Reuse first: a probe is allowed only when the evidence is marked needs_live in the playbook,
+  # or every reuse source for it is missing or stale. The Copilot shows the reuse rate per investigation.
+  target_reuse_rate: 0.85
+  max_probes_per_investigation: 3
+  min_interval_per_device_s: 30
+  record: [command_or_call, reason_for_probe, duration_ms, output_excerpt]

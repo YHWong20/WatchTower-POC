@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Signal",
+  "description": "A deterministic watch-rule hit raised by a domain agent. No LLM involvement. Signals are weak on their own; the Parent Agent correlates them.",
+  "type": "object",
+  "required": ["id", "ts", "domain", "agent", "rule", "entity", "severity", "summary", "value", "baseline", "source"],
+  "properties": {
+    "id": {"type": "string", "pattern": "^sig-[0-9a-f]{8}$"},
+    "ts": {"type": "string", "format": "date-time"},
+    "domain": {"enum": ["network", "openshift"]},
+    "agent": {"enum": ["network-agent", "openshift-agent"]},
+    "rule": {"type": "string", "description": "Watch rule id, e.g. net.output_drops_rising, ocp.api_svc_timeouts, ocp.lease_update_failures, ocp.node_not_ready"},
+    "entity": {
+      "type": "object",
+      "required": ["kind", "name"],
+      "properties": {
+        "kind": {"enum": ["switch", "interface", "cluster", "node", "pod", "service"]},
+        "name": {"type": "string", "description": "e.g. cisco-sim-1:Gi1/0/11 or master-2"}
+      }
+    },
+    "severity": {"enum": ["weak", "notable", "state_change"], "description": "weak = below any existing alarm threshold; state_change = e.g. node NotReady"},
+    "summary": {"type": "string", "maxLength": 200},
+    "value": {"type": "number"},
+    "baseline": {"type": "number"},
+    "window_s": {"type": "integer"},
+    "source": {
+      "type": "object",
+      "required": ["tool", "query"],
+      "description": "Where the data came from. Reuse first: splunk or solarwinds unless a probe was required.",
+      "properties": {
+        "tool": {"enum": ["splunk", "solarwinds", "probe_cli", "probe_k8s_api"]},
+        "query": {"type": "string", "description": "The exact SPL, SWQL, CLI command or API path"},
+        "reason_for_probe": {"type": "string", "description": "Required when tool is a probe"}
+      }
+    }
+  }
+}

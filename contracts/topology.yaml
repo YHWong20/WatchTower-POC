@@ -1,0 +1,30 @@
+# Wiring the Parent Agent uses to correlate findings across the Cisco and OpenShift domains.
+# In production, generate this from CDP/LLDP neighbours and the CMDB; keep it in Git.
+switches:
+  cisco-sim-1:
+    role: access
+    mgmt: {ssh: "cisco-sim-1:22", snmp: "cisco-sim-1:161"}
+    ports:
+      Gi1/0/10: {connects_to: master-1, kind: ocp_node}
+      Gi1/0/11: {connects_to: master-2, kind: ocp_node}
+      Gi1/0/12: {connects_to: master-3, kind: ocp_node}
+      Gi1/0/13: {connects_to: worker-1, kind: ocp_node}
+      Gi1/0/48: {connects_to: "cisco-sim-2:Gi1/0/48", kind: uplink}
+  cisco-sim-2:
+    role: distribution
+    mgmt: {ssh: "cisco-sim-2:22", snmp: "cisco-sim-2:161"}
+    ports:
+      Gi1/0/48: {connects_to: "cisco-sim-1:Gi1/0/48", kind: downlink}
+      Gi1/0/1:  {connects_to: core, kind: uplink}
+clusters:
+  ocp-prod:                       # display name; the PoC cluster is kind "ocp-sim"
+    platform: openshift
+    api_service_vip: 172.30.0.1   # kind: 10.96.0.1
+    nodes:
+      master-1: {role: master, kind_node: ocp-sim-control-plane,  switch_port: "cisco-sim-1:Gi1/0/10"}
+      master-2: {role: master, kind_node: ocp-sim-control-plane2, switch_port: "cisco-sim-1:Gi1/0/11"}
+      master-3: {role: master, kind_node: ocp-sim-control-plane3, switch_port: "cisco-sim-1:Gi1/0/12"}
+      worker-1: {role: worker, kind_node: ocp-sim-worker,         switch_port: "cisco-sim-1:Gi1/0/13"}
+# Paths the correlator understands:
+#   node -> access port -> access switch -> uplink -> distribution switch
+#   master -> (kubernetes Service) -> every other master's access port
