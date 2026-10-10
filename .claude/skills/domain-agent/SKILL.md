@@ -36,11 +36,21 @@ Network Agent, every 60 s:
 - `net.link_flap`: `%LINK-3-UPDOWN` in Splunk syslog for a port twice in 10 min.
 - `net.util_vs_baseline`: utilisation > baseline p95 + 20 points (baseline per hour of week).
 OpenShift Agent, every 30 s:
-- `ocp.api_svc_timeouts`: Service timeouts per node per 5 min > baseline + 5.
+- `ocp.api_svc_timeouts`: Service timeouts per node per 5 min > baseline + 2 (svc-prober calls
+  every second with a 1 s timeout; phase A of the lab fault gives about 10 per 5 min).
 - `ocp.lease_update_failures`: any `failed to update lease` in 5 min.
 - `ocp.etcd_latency`: etcd "took too long" / unhealthy-peer warnings > baseline.
 - `ocp.node_not_ready`: NodeNotReady event (severity `state_change`).
-Thresholds live in `wt/agents/<domain>/rules.yaml`, not in code.
+Thresholds live in `wt/agents/<domain>/rules.yaml`, not in code. Each watch query is a `watch_*`
+entry in `contracts/sources.yaml` (one query covers every node or port). Signals repeat every
+`repeat_s` while a rule keeps hitting; state changes are sent once.
+
+## Where things are
+- `wt/agents/base.py`: Task / EvidenceResult messages, watch loop, task worker, baselines, /health.
+- `wt/agents/network/agent.py`, `wt/agents/openshift/agent.py`: rules and evidence handlers
+  (`ev_<signal>`), each returning `facts` the Parent Agent's predicates read.
+- Record live exchanges with `WT_RECORD_SOURCES=<file>`; replay them in tests with
+  `wt.common.sources.recording.ReplayTransport` (see tests/test_domain_agents.py).
 
 ## Read-only guarantees
 - CLI: the SSH adapter refuses anything not matching `^show ` and logs the attempt.

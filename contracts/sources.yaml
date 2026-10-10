@@ -61,6 +61,27 @@ signals:
     primary: probe_k8s_api
     call: "GET /apis/coordination.k8s.io/v1/namespaces/kube-node-lease/leases/{node} -> spec.renewTime"
     when: Never during diagnosis (lease failures are in Splunk). Offered to the SRE as a next step to watch it live.
+  api_svc_calls:
+    meaning: Calls from a node to the kubernetes Service per minute, split into ok=true / ok=false. Partial failure (some calls fail, some succeed in the same minutes) points at the path, not at a dead node or API server.
+    primary: splunk
+    query: 'index=ocp sourcetype=kube:container:svc-prober host={node} earliest=-{window} | timechart span=1m count by ok'
+  api_svc_timeouts_by_node:
+    meaning: Which nodes see Service timeouts. One node only = that node's path; every node = the API servers.
+    primary: splunk
+    query: 'index=ocp sourcetype=kube:container:svc-prober "i/o timeout" earliest=-{window} | stats count by host'
+  # Watch queries (OpenShift Agent, every 30 s): one search covers every node.
+  watch_api_svc_calls:
+    primary: splunk
+    query: 'index=ocp sourcetype=kube:container:svc-prober earliest=-{window} | stats count by host, ok'
+  watch_lease_failures:
+    primary: splunk
+    query: 'index=ocp sourcetype=kubelet ("failed to update lease" OR "error updating node status") earliest=-{window} | stats count by host'
+  watch_etcd_warnings:
+    primary: splunk
+    query: 'index=ocp sourcetype=kube:container:etcd ("apply request took too long" OR "slow fdatasync" OR "prober detected unhealthy status") earliest=-{window} | stats count by host'
+  watch_node_events:
+    primary: splunk
+    query: 'index=ocp sourcetype=kube:events involvedObject.kind=Node reason IN (NodeNotReady, NodeReady) earliest=-{window} | table _time involvedObject.name reason message'
   # ---------- Network domain ----------
   interface_discards:
     primary: solarwinds
@@ -91,6 +112,17 @@ signals:
     primary: probe_cli
     command: "show interfaces counters errors"
     when: Only if SolarWinds error data is missing for the port.
+
+  # Watch queries (Network Agent, every 60 s): one query covers every port of every switch.
+  watch_interface_errors:
+    primary: solarwinds
+    query: "SELECT E.InterfaceID, E.Interface.Name AS Port, E.Node.Caption AS Switch, E.DateTime, E.InDiscards, E.OutDiscards, E.InErrors, E.OutErrors FROM Orion.NPM.InterfaceErrors E WHERE E.DateTime > ADDDATE('minute', -{minutes}, GETUTCDATE()) ORDER BY E.DateTime"
+  watch_interface_traffic:
+    primary: solarwinds
+    query: "SELECT T.InterfaceID, T.Interface.Name AS Port, T.Node.Caption AS Switch, T.DateTime, T.InPercentUtil, T.OutPercentUtil FROM Orion.NPM.InterfaceTraffic T WHERE T.DateTime > ADDDATE('minute', -{minutes}, GETUTCDATE()) ORDER BY T.DateTime"
+  watch_link_events:
+    primary: splunk
+    query: 'index=network sourcetype=cisco:ios "%LINK-3-UPDOWN" earliest=-{window} | table _time host _raw'
 
 probe_policy:
   # Reuse first: a probe is allowed only when the evidence is marked needs_live in the playbook,

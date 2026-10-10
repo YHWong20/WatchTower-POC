@@ -1,4 +1,4 @@
-# svc-prober: one pod per node (hostNetwork) calling the kubernetes Service VIP every 5 s.
+# svc-prober: one pod per node (hostNetwork) calling the kubernetes Service VIP every second (1 s timeout).
 # Full profile: the masters are the subject and the worker is a control. Lite profile: the
 # worker is the fault target, so it must run there too. Hence every node, not masters only.
 apiVersion: apps/v1
@@ -28,8 +28,8 @@ spec:
             - name: NODE_NAME
               valueFrom: {fieldRef: {fieldPath: spec.nodeName}}
             - {name: TARGET, value: "https://10.96.0.1:443/readyz"}
-            - {name: INTERVAL_S, value: "5"}
-            - {name: TIMEOUT_S, value: "2"}
+            - {name: INTERVAL_S, value: "1"}       # one sample a second: phase A of the fault gives ~10 timeouts / 5 min
+            - {name: TIMEOUT_S, value: "1"}       # Kubernetes probes default to timeoutSeconds: 1
           resources:
             requests: {cpu: 5m, memory: 16Mi}
             limits: {memory: 48Mi}

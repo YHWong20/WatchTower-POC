@@ -1,14 +1,12 @@
-"""Shared plumbing for the simulators: where they keep state, and HTTP servers that share a loop."""
+"""Shared plumbing for the simulators: where they keep state (and the shared HTTP server helper)."""
 
 from __future__ import annotations
 
-import contextlib
 import os
 from pathlib import Path
 
-import uvicorn
-
 from wt.common.config import REPO_ROOT
+from wt.common.web import http_server  # noqa: F401  (re-exported for the sims)
 
 
 def state_dir() -> Path:
@@ -16,16 +14,3 @@ def state_dir() -> Path:
     path = Path(os.environ.get("SIM_STATE_DIR", str(REPO_ROOT / "data" / "sims")))
     path.mkdir(parents=True, exist_ok=True)
     return path
-
-
-class _Server(uvicorn.Server):
-    """uvicorn without its own signal handling: several servers share one loop in wt-sims, and
-    sims/run.py stops them all together on SIGTERM."""
-
-    @contextlib.contextmanager
-    def capture_signals(self):
-        yield
-
-
-def http_server(app, port: int) -> uvicorn.Server:
-    return _Server(uvicorn.Config(app, host="0.0.0.0", port=port, log_level="warning"))

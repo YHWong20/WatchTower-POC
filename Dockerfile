@@ -13,8 +13,8 @@ COPY --from=build /app/.venv /app/.venv
 RUN python -c "import asyncssh, pathlib; p = pathlib.Path('/etc/wt-sim'); p.mkdir(); \
 asyncssh.generate_private_key('ssh-ed25519').write_private_key(p / 'ssh_host_ed25519_key')" \
  && chown -R 10001 /etc/wt-sim \
- && mkdir -p /var/lib/wt-sims && chown 10001 /var/lib/wt-sims
-ENV SIM_STATE_DIR=/var/lib/wt-sims
+ && mkdir -p /var/lib/wt-sims /var/lib/watchtower && chown 10001 /var/lib/wt-sims /var/lib/watchtower
+ENV SIM_STATE_DIR=/var/lib/wt-sims USER=watchtower LOGNAME=watchtower HOME=/var/lib/watchtower
 COPY contracts ./contracts
 COPY playbooks ./playbooks
 COPY wt ./wt

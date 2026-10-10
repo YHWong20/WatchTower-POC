@@ -1,0 +1,18 @@
+# OpenShift Agent watch rules (OCP domain). Thresholds live here, not in code.
+# Every rule reads Splunk (watch_* queries in contracts/sources.yaml); the Kubernetes API is
+# never used for watching.
+interval_s: 30
+repeat_s: 120           # an ongoing hit is re-sent with fresh values this often
+window: 5m              # every rule looks at the last 5 minutes
+stale_after_s: 120      # no svc-prober lines from a node for this long: its timeout rule does not run
+
+rules:
+  ocp.api_svc_timeouts:
+    above_baseline: 2   # timeouts per node per 5 min > baseline + this (measured: phase A of the
+                        # lab fault gives 3-10 per 5 min with the prober's 1 s timeout; healthy 0)
+  ocp.lease_update_failures:
+    min_count: 1        # any "failed to update lease" / "error updating node status" in 5 min
+  ocp.etcd_latency:
+    above_baseline: 10  # etcd warnings per node per 5 min > max(baseline x factor, baseline + this)
+    factor: 3
+  ocp.node_not_ready: {}   # every NodeNotReady event for a node (severity state_change)

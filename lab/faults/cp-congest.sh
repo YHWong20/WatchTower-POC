@@ -47,7 +47,8 @@ clear_all() {
   mark clear
   echo "$(date +%T) cleared"
 }
-trap clear_all EXIT INT TERM
+trap clear_all EXIT
+trap 'exit 130' INT TERM          # stop for good (the EXIT trap clears); never carry on to the next phase
 
 echo "$(date +%T) fault on $NODE, cisco-sim-1 $PORT"
 mark A; echo "$(date +%T) phase A: creeping congestion (${A}s)";    netem delay 80ms 60ms loss 3%;    switch low;    sleep "$A"

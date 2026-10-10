@@ -47,7 +47,8 @@ down, node down; history in `Orion.AlertHistory`.
 ## Health check (run before any demo): `make health`
 - Nodes Ready (2 lite, 4 full) and `node-monitor-grace-period=40s`.
 - `kubectl top nodes` returns numbers for every node.
-- `kubectl -n wt-lab logs ds/svc-prober --tail=3` shows `ok` lines with latency in ms.
+- `kubectl -n wt-lab logs ds/svc-prober --tail=3` shows `ok` lines with latency in ms (one call a
+  second, 1 s timeout: Kubernetes' default probe timeout).
 - wt-agent RBAC is read-only (`kubectl auth can-i ... --as=system:serviceaccount:wt-lab:wt-agent`).
 - splunk-sim has fresh data from every source (`lab/check_tools.py`), e.g.
   `curl -s -u admin:demo localhost:8089/services/search/jobs/export -d search='search index=* earliest=-5m | stats count by sourcetype' -d output_mode=json`

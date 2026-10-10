@@ -6,15 +6,21 @@ work; a restarted consumer first re-reads its own unacknowledged messages, then 
 
 from __future__ import annotations
 
+import asyncio
 import json
+import logging
 from dataclasses import dataclass
 from typing import Any, AsyncIterator
 
 import redis.asyncio as aioredis
 from pydantic import BaseModel
+from redis.exceptions import ConnectionError as RedisConnectionError
 from redis.exceptions import ResponseError
+from redis.exceptions import TimeoutError as RedisTimeoutError
 
 from wt.common.contracts import dump
+
+log = logging.getLogger("wt.bus")
 
 SIGNALS = "wt.signals"
 TASKS = "wt.tasks"
@@ -40,7 +46,9 @@ class Bus:
 
     @classmethod
     def from_url(cls, url: str) -> Bus:
-        return cls(aioredis.from_url(url, decode_responses=True))
+        # redis-py 8 defaults socket_timeout to 5 s, which races a 5 s blocking XREADGROUP.
+        return cls(aioredis.from_url(url, decode_responses=True, socket_timeout=30, socket_connect_timeout=5,
+                                     health_check_interval=30))
 
     async def close(self) -> None:
         await self.r.aclose()
@@ -96,7 +104,13 @@ class Bus:
                     yield msg
                 cursor = batch[-1].id
         while True:
-            for msg in await self.read(streams, group, consumer, count, block_ms):
+            try:
+                batch = await self.read(streams, group, consumer, count, block_ms)
+            except (RedisConnectionError, RedisTimeoutError) as exc:   # Redis restarting: wait, keep going
+                log.warning("bus read on %s failed (%s); retrying", ",".join(streams), type(exc).__name__)
+                await asyncio.sleep(2)
+                continue
+            for msg in batch:
                 yield msg
 
     async def ack(self, group: str, msg: Message) -> None:

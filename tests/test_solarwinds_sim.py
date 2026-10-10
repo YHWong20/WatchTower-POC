@@ -87,7 +87,7 @@ def test_every_swql_template_in_sources_compiles(sources):
             if text and text.startswith("SELECT"):
                 swql.compile_query(render_template(text, **{p: params[p] for p in placeholders(text)}))
                 seen += 1
-    assert seen == 5
+    assert seen == 7                     # 5 evidence queries + 2 Network Agent watch queries
 
 
 def test_compiles_navigation_alias_top_and_date_functions():

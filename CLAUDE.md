@@ -13,7 +13,8 @@ Scope: Cisco + OpenShift only. See MASTER_PROMPT.md.
 - `contracts/` schemas, sources (reuse-first rulebook), topology, escalation
 - `playbooks/` investigation playbooks (YAML)
 - `wireframes/` the Copilot design
-- `eval/` recorded fixtures and expected outputs
+- `eval/` recorded fixtures (`fixtures/`, `fixtures/recorded/`) and investigation cases (`cases/`:
+  recorded evidence + expected outcome; `make_case.py` builds one from WT_RECORD_EVIDENCE output)
 
 ## Rules
 - Read-only. No write calls to switches or the cluster. CLI allowlist: commands starting with
@@ -37,7 +38,11 @@ Scope: Cisco + OpenShift only. See MASTER_PROMPT.md.
 ## Commands
 - `make lab-up` / `make lab-down`, `make up` / `make down`, `make logs`
 - `make health`, `make fault [NODE=…] [MODE=investigate]` (NODE defaults by profile), `make clear`,
-  `make verify-flap`, `make verify-sources`
+  `make verify-flap`, `make verify-sources`, `make verify-watch`, `make verify-investigation`
+- Copilot: http://localhost:8080. Agents' health: :8101 network, :8102 openshift, :8103 parent.
+- Rebuilding the image restarts every service that uses it (sims too, which drops the switch's
+  in-memory fault). To update only the agents: `docker compose build wt-agents && docker compose
+  up -d --no-deps wt-agents`.
 - `make demo`, `make record NAME=…`, `make replay NAME=…`, `make eval`, `make test`
 
 ## Mac notes (MacBook Air M2)

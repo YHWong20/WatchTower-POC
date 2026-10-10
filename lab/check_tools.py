@@ -15,7 +15,7 @@ SPLUNK = "http://127.0.0.1:8089"
 SWIS = "http://127.0.0.1:17778/SolarWinds/InformationService/v3/Json/Query"
 # sourcetype -> (how far back to look, why it should be there)
 STREAMS = {
-    "kube:container:svc-prober": ("-2m", "svc-prober logs every 5 s"),
+    "kube:container:svc-prober": ("-2m", "svc-prober logs every second"),
     "kube:container:kube-apiserver": ("-30m", "API server logs"),
     "kube:container:etcd": ("-30m", "etcd logs"),
     "kubelet": ("-24h", "kubelet journal"),

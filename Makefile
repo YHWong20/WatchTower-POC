@@ -7,7 +7,7 @@ NODE ?= ocp-sim-control-plane2
 endif
 COMPOSE = docker compose --profile $(WT_PROFILE)
 
-.PHONY: sync test selfcheck lab-up lab-down up down logs health fault clear verify-flap verify-sources demo record replay eval
+.PHONY: sync test selfcheck lab-up lab-down up down logs health fault clear verify-flap verify-sources verify-watch verify-investigation demo record replay eval
 
 sync:
 	uv sync
@@ -25,7 +25,7 @@ lab-up:                     ## kind cluster + metrics-server, svc-prober, demo a
 lab-down:
 	kind delete cluster --name ocp-sim
 
-up:                         ## Cisco sims, splunk-sim, solarwinds-sim, forwarder, redis (agents join in phase 4)
+up:                         ## sims, stand-ins, redis and the agents + Copilot (http://localhost:8080)
 	$(COMPOSE) up -d --build
 
 down:
@@ -48,6 +48,12 @@ verify-flap:                ## fault + NotReady/Ready, no reboot, prober timeout
 
 verify-sources:             ## phase 3 "done when": every SPL/SWQL template in sources.yaml against the stand-ins
 	PYTHONPATH=. uv run python lab/verify_sources.py
+
+verify-watch:               ## phase 4 "done when": fault phase A -> both watch signals within 5 min, no probes
+	uv run python lab/verify_watch.py
+
+verify-investigation:       ## phase 5 "done when": recorded incidents (eval/cases) with the LLM off and on
+	uv run pytest -v tests/test_investigation.py
 
 # ---------------------------------------------------------------- later phases (see prompts/)
 demo record replay:

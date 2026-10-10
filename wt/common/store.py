@@ -12,7 +12,7 @@ import threading
 from pathlib import Path
 from typing import Any
 
-from wt.common.contracts import EvidenceItem, Investigation, dump, utcnow
+from wt.common.contracts import EvidenceItem, Investigation, Signal, dump, utcnow
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS investigations (
@@ -51,6 +51,34 @@ CREATE TABLE IF NOT EXISTS audit (
     duration_ms  INTEGER NOT NULL,
     ok           INTEGER NOT NULL,
     detail       TEXT
+);
+CREATE TABLE IF NOT EXISTS signals (
+    id          TEXT PRIMARY KEY,
+    ts          TEXT NOT NULL,
+    agent       TEXT NOT NULL,
+    rule        TEXT NOT NULL,
+    entity      TEXT NOT NULL,
+    severity    TEXT NOT NULL,
+    data        TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS signals_ts ON signals(ts);
+CREATE TABLE IF NOT EXISTS samples (
+    metric      TEXT NOT NULL,
+    entity      TEXT NOT NULL,
+    ts          REAL NOT NULL,
+    value       REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS samples_key ON samples(metric, entity, ts);
+CREATE TABLE IF NOT EXISTS baselines (
+    key         TEXT NOT NULL,
+    bucket      TEXT NOT NULL,
+    data        TEXT NOT NULL,
+    PRIMARY KEY (key, bucket)
+);
+CREATE TABLE IF NOT EXISTS kv (
+    key         TEXT PRIMARY KEY,
+    value       TEXT NOT NULL,
+    updated_at  TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS llm_cache (
     key         TEXT PRIMARY KEY,
@@ -159,6 +187,64 @@ class Store:
         else:
             rows = self._rows("SELECT data FROM watch_items ORDER BY updated_at DESC LIMIT ?", (limit,))
         return [json.loads(r["data"]) for r in rows]
+
+    # ------------------------------------------------------------ signals (domain agents' watch-rule hits)
+
+    def save_signal(self, sig: Signal) -> None:
+        self._exec(
+            "INSERT OR REPLACE INTO signals (id, ts, agent, rule, entity, severity, data) VALUES (?,?,?,?,?,?,?)",
+            (sig.id, sig.ts.isoformat(), sig.agent, sig.rule, sig.entity.name, sig.severity, json.dumps(dump(sig))),
+        )
+
+    def list_signals(self, since: str | None = None, agent: str | None = None, limit: int = 200) -> list[Signal]:
+        sql, args = "SELECT data FROM signals WHERE 1=1", []
+        if since:
+            sql += " AND ts >= ?"
+            args.append(since)
+        if agent:
+            sql += " AND agent = ?"
+            args.append(agent)
+        rows = self._rows(sql + " ORDER BY ts DESC LIMIT ?", (*args, limit))
+        return [Signal.model_validate_json(r["data"]) for r in rows]
+
+    def get_signal(self, sig_id: str) -> Signal | None:
+        rows = self._rows("SELECT data FROM signals WHERE id=?", (sig_id,))
+        return Signal.model_validate_json(rows[0]["data"]) if rows else None
+
+    # ------------------------------------------------------------ samples (metric history for sparklines)
+
+    def add_samples(self, rows: list[tuple[str, str, float, float]]) -> None:
+        """rows: (metric, entity, epoch ts, value)."""
+        with self._lock:
+            self._db.executemany("INSERT INTO samples (metric, entity, ts, value) VALUES (?,?,?,?)", rows)
+
+    def samples(self, metric: str, entity: str, since: float) -> list[tuple[float, float]]:
+        rows = self._rows("SELECT ts, value FROM samples WHERE metric=? AND entity=? AND ts>=? ORDER BY ts",
+                          (metric, entity, since))
+        return [(r["ts"], r["value"]) for r in rows]
+
+    def trim_samples(self, before: float) -> None:
+        self._exec("DELETE FROM samples WHERE ts < ?", (before,))
+
+    # ------------------------------------------------------------ baselines and small state
+
+    def baseline_get(self, key: str, bucket: str) -> list[float]:
+        rows = self._rows("SELECT data FROM baselines WHERE key=? AND bucket=?", (key, bucket))
+        return json.loads(rows[0]["data"]) if rows else []
+
+    def baseline_all(self, key: str) -> list[float]:
+        return [v for r in self._rows("SELECT data FROM baselines WHERE key=?", (key,)) for v in json.loads(r["data"])]
+
+    def baseline_put(self, key: str, bucket: str, values: list[float]) -> None:
+        self._exec("INSERT OR REPLACE INTO baselines (key, bucket, data) VALUES (?,?,?)", (key, bucket, json.dumps(values)))
+
+    def kv_get(self, key: str, default: Any = None) -> Any:
+        rows = self._rows("SELECT value FROM kv WHERE key=?", (key,))
+        return json.loads(rows[0]["value"]) if rows else default
+
+    def kv_put(self, key: str, value: Any) -> None:
+        self._exec("INSERT OR REPLACE INTO kv (key, value, updated_at) VALUES (?,?,?)",
+                   (key, json.dumps(value, default=str), utcnow().isoformat()))
 
     # ------------------------------------------------------------ audit (written via wt.common.audit)
 

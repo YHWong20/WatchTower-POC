@@ -1,0 +1,18 @@
+# Network Agent watch rules (Cisco domain). Thresholds live here, not in code.
+# Every rule reads SolarWinds or Splunk (watch_* queries in contracts/sources.yaml); no probes.
+interval_s: 60          # SolarWinds polls every 60 s
+repeat_s: 120           # an ongoing hit is re-sent with fresh values this often
+stale_after_s: 180      # newest SolarWinds poll older than this: the metric rules do not run
+lookback_min: 10        # SolarWinds window each cycle
+
+rules:
+  net.output_drops_rising:
+    min_polls: 3        # OutDiscards delta > 0 for this many consecutive polls
+  net.errors_rising:
+    min_polls: 2        # InErrors delta > 0 for this many consecutive polls
+  net.link_flap:
+    window: 10m
+    min_changes: 2      # %LINK-3-UPDOWN for the same port this often in the window
+  net.util_vs_baseline:
+    points_above_p95: 20
+    min_samples: 30     # per port, hour-of-week bucket (all hours until the bucket has enough)

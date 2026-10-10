@@ -1,4 +1,4 @@
-"""svc-prober: call the kubernetes Service VIP from the node's own network every 5 s.
+"""svc-prober: call the kubernetes Service VIP from the node's own network every INTERVAL_S (1 s in the lab).
 
 Runs with hostNetwork, so its calls take the same path as the kubelet's and the control
 plane's own calls to https://10.96.0.1:443 (172.30.0.1 on OpenShift): kube-proxy picks one API
