@@ -20,7 +20,7 @@ spec:
         - {key: node.kubernetes.io/not-ready, operator: Exists, effect: NoExecute}
         - {key: node.kubernetes.io/unreachable, operator: Exists, effect: NoExecute}
       containers:
-        - name: prober
+        - name: svc-prober            # Splunk sourcetype kube:container:svc-prober
           image: python:3.12-slim
           imagePullPolicy: IfNotPresent
           command: [python, -u, /app/svc-prober.py]

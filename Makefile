@@ -7,7 +7,7 @@ NODE ?= ocp-sim-control-plane2
 endif
 COMPOSE = docker compose --profile $(WT_PROFILE)
 
-.PHONY: sync test selfcheck lab-up lab-down up down logs health fault clear verify-flap demo record replay eval
+.PHONY: sync test selfcheck lab-up lab-down up down logs health fault clear verify-flap verify-sources demo record replay eval
 
 sync:
 	uv sync
@@ -18,14 +18,14 @@ test: sync
 selfcheck:
 	uv run python -m wt.common.selfcheck
 
-# ---------------------------------------------------------------- lab (phase 2)
+# ---------------------------------------------------------------- lab (phases 2 and 3)
 lab-up:                     ## kind cluster + metrics-server, svc-prober, demo app, read-only RBAC
 	lab/up.sh
 
 lab-down:
 	kind delete cluster --name ocp-sim
 
-up:                         ## simulators + redis (agents join in phase 4)
+up:                         ## Cisco sims, splunk-sim, solarwinds-sim, forwarder, redis (agents join in phase 4)
 	$(COMPOSE) up -d --build
 
 down:
@@ -43,8 +43,11 @@ fault:                      ## make fault [NODE=...] [MODE=investigate]
 clear:
 	lab/faults/clear-all.sh
 
-verify-flap:                ## phase 2 "done when": fault + NotReady/Ready, no reboot, prober timeouts
+verify-flap:                ## fault + NotReady/Ready, no reboot, prober timeouts, no alerts in phase A
 	uv run python lab/verify_flap.py $(NODE)
+
+verify-sources:             ## phase 3 "done when": every SPL/SWQL template in sources.yaml against the stand-ins
+	PYTHONPATH=. uv run python lab/verify_sources.py
 
 # ---------------------------------------------------------------- later phases (see prompts/)
 demo record replay:

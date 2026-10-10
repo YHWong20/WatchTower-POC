@@ -34,25 +34,32 @@ done
 "${K[@]}" -n wt-lab rollout status ds/svc-prober --timeout=180s
 "${K[@]}" -n wt-lab rollout status deploy/demo-web --timeout=180s
 
-# Read-only kubeconfig for the agents (wt-agent service account, get/list/watch only).
+# Read-only kubeconfigs from service-account tokens, for containers on the kind network:
+#   data/kubeconfig-agent.yaml      wt-agent (WatchTower agents): get/list/watch
+#   data/kubeconfig-forwarder.yaml  splunk-forwarder (sims/forwarder): events get/list/watch
 mkdir -p data
-until token=$("${K[@]}" -n wt-lab get secret wt-agent-token -o jsonpath='{.data.token}' 2>/dev/null) && [[ -n "$token" ]]; do sleep 1; done
-ca=$("${K[@]}" -n wt-lab get secret wt-agent-token -o jsonpath='{.data.ca\.crt}')
 server=$(kind get kubeconfig --internal --name ocp-sim | awk '/server:/ {print $2; exit}')
-cat > data/kubeconfig-agent.yaml <<YAML
+write_kubeconfig() {   # <service account> <file>
+  local sa=$1 file=$2 token ca
+  until token=$("${K[@]}" -n wt-lab get secret "$sa-token" -o jsonpath='{.data.token}' 2>/dev/null) && [[ -n "$token" ]]; do sleep 1; done
+  ca=$("${K[@]}" -n wt-lab get secret "$sa-token" -o jsonpath='{.data.ca\.crt}')
+  cat > "$file" <<YAML
 apiVersion: v1
 kind: Config
 clusters:
   - name: ocp-sim
     cluster: {server: "$server", certificate-authority-data: "$ca"}
 users:
-  - name: wt-agent
+  - name: $sa
     user: {token: "$(echo "$token" | base64 -d)"}
 contexts:
-  - name: wt-agent@ocp-sim
-    context: {cluster: ocp-sim, user: wt-agent}
-current-context: wt-agent@ocp-sim
+  - name: $sa@ocp-sim
+    context: {cluster: ocp-sim, user: $sa}
+current-context: $sa@ocp-sim
 YAML
-chmod 600 data/kubeconfig-agent.yaml
-echo "agent kubeconfig: data/kubeconfig-agent.yaml (server $server, read-only)"
+  chmod 600 "$file"
+  echo "kubeconfig for $sa: $file (server $server, read-only)"
+}
+write_kubeconfig wt-agent data/kubeconfig-agent.yaml
+write_kubeconfig splunk-forwarder data/kubeconfig-forwarder.yaml
 "${K[@]}" get nodes -L wt/name

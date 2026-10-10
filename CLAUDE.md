@@ -37,7 +37,7 @@ Scope: Cisco + OpenShift only. See MASTER_PROMPT.md.
 ## Commands
 - `make lab-up` / `make lab-down`, `make up` / `make down`, `make logs`
 - `make health`, `make fault [NODE=…] [MODE=investigate]` (NODE defaults by profile), `make clear`,
-  `make verify-flap`
+  `make verify-flap`, `make verify-sources`
 - `make demo`, `make record NAME=…`, `make replay NAME=…`, `make eval`, `make test`
 
 ## Mac notes (MacBook Air M2)
@@ -48,4 +48,7 @@ Scope: Cisco + OpenShift only. See MASTER_PROMPT.md.
   `kind load docker-image` fails on multi-platform images).
 - kind's kubernetes Service VIP is 10.96.0.1 (OpenShift: 172.30.0.1). Display names
   master-1..3 come from topology.yaml.
+- Stand-ins on the Mac: splunk-sim REST 127.0.0.1:8089 (token `wt-poc-token`, or admin/demo),
+  HEC :8088; solarwinds-sim SWIS 127.0.0.1:17778 (watchtower/watchtower). The kind network is
+  dual-stack: bind or connect IPv4 explicitly where a name could resolve to IPv6 first.
 - No nested virtualisation on M2, so no VM-based network images.

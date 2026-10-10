@@ -36,7 +36,7 @@ signals:
   static_pod_restarts:
     primary: splunk
     query: 'index=ocp sourcetype=kube:events namespace IN (openshift-kube-apiserver, openshift-etcd, kube-system) source_host={node} reason IN (Killing, Started, BackOff, Unhealthy) earliest=-{window} | stats count by involvedObject.name, reason'
-    reading: No Killing/Started events for the API server or etcd pods on the node = they did not restart.
+    reading: No Killing/Started events for the API server or etcd pods on the node = they did not restart. Unhealthy (readiness) events are not restarts; in the lab, metrics-server on the flapping node logs them while it cannot reach the API. A repeated event arrives once per count update.
     probe_fallback: {tool: probe_k8s_api, call: "GET pods on {node} -> restartCount", when: "only if events are missing for the window"}
   pod_evictions:
     primary: splunk
@@ -48,6 +48,7 @@ signals:
   ovn_errors:
     primary: splunk
     query: 'index=ocp sourcetype=kube:container:ovnkube* host={node} (error OR "connection refused") earliest=-{window} | stats count'
+    lab: kind runs kindnet, not OVN-Kubernetes, so the lab has no ovnkube logs; the query runs and counts 0.
   node_pressure:
     primary: splunk
     query: 'index=ocp sourcetype=kube:events involvedObject.name={node} reason IN (NodeHasInsufficientMemory, NodeHasDiskPressure, NodeHasInsufficientPID, SystemOOM) earliest=-{window}'

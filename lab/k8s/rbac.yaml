@@ -1,5 +1,5 @@
 # Read-only access for the WatchTower agents: get/list/watch, nothing else. The agents use the
-# wt-agent token (lab/agent-kubeconfig.sh), never the kind admin kubeconfig.
+# wt-agent token (data/kubeconfig-agent.yaml, written by lab/up.sh), never the kind admin kubeconfig.
 apiVersion: v1
 kind: ServiceAccount
 metadata: {name: wt-agent, namespace: wt-lab}
@@ -47,3 +47,33 @@ subjects:
 apiVersion: v1
 kind: ServiceAccount
 metadata: {name: svc-prober, namespace: wt-lab}
+---
+# The Splunk forwarder stand-in (sims/forwarder) reads Kubernetes events with its own identity,
+# separate from WatchTower's: events get/list/watch, nothing else. Its kubeconfig is
+# data/kubeconfig-forwarder.yaml (written by lab/up.sh).
+apiVersion: v1
+kind: ServiceAccount
+metadata: {name: splunk-forwarder, namespace: wt-lab}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: splunk-forwarder-token
+  namespace: wt-lab
+  annotations: {kubernetes.io/service-account.name: splunk-forwarder}
+type: kubernetes.io/service-account-token
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata: {name: splunk-forwarder-events}
+rules:
+  - apiGroups: [""]
+    resources: [events]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata: {name: splunk-forwarder-events}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: splunk-forwarder-events}
+subjects:
+  - {kind: ServiceAccount, name: splunk-forwarder, namespace: wt-lab}

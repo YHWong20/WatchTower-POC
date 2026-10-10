@@ -1,0 +1,31 @@
+# splunk-sim scheduled alerts, as an ops team would typically have them.
+# Each runs every minute over the events indexed since its previous run (and with _time no older
+# than `earliest`, so a forwarder catching up on old data does not fire stale alerts). When the
+# search returns results it fires once (digest mode); fired alerts show in
+# /services/alerts/fired_alerts until they expire.
+# None of these fire on creeping congestion: that is the gap WatchTower fills.
+#   severity: 1 debug, 2 info, 3 warning, 4 error, 5 severe, 6 fatal (Splunk alert.severity)
+
+NodeNotReady:
+  search: index=ocp sourcetype=kube:events reason=NodeNotReady involvedObject.kind=Node
+  earliest: -10m
+  severity: 4
+  entity_field: involvedObject.name
+  expires: 24h
+  description: A node went NotReady (node-controller event; the per-pod NodeNotReady events are left out).
+
+PodEvicted:
+  search: index=ocp sourcetype=kube:events reason=Evicted
+  earliest: -10m
+  severity: 3
+  entity_field: involvedObject.name
+  expires: 24h
+  description: The kubelet evicted a pod (resource pressure).
+
+SwitchInterfaceDown:
+  search: 'index=network sourcetype=cisco:ios "%LINK-3-UPDOWN" "changed state to down"'
+  earliest: -10m
+  severity: 4
+  entity_field: host
+  expires: 24h
+  description: A switch port went down.

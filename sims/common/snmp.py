@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import bisect
 import itertools
+import socket
 import time
 from typing import Callable, Iterable
 
@@ -272,8 +273,10 @@ class SnmpClient:
 
     async def __aenter__(self) -> SnmpClient:
         loop = asyncio.get_running_loop()
+        # IPv4 only: the agents listen on 0.0.0.0, and the kind network is dual-stack, so a
+        # name like cisco-sim-1 would otherwise resolve to its IPv6 address first.
         self._transport, self._proto = await loop.create_datagram_endpoint(
-            _ClientProtocol, remote_addr=(self.host, self.port))
+            _ClientProtocol, remote_addr=(self.host, self.port), family=socket.AF_INET)
         return self
 
     async def __aexit__(self, *exc) -> None:

@@ -11,21 +11,26 @@ condition every 2 s, then checks:
   4. svc-prober on that node logged i/o timeouts, reported per fault phase.
      On a master in the full profile, phase C should fail about 2 in 3 calls (the call to its
      own API server stays local). On the lite worker every call crosses the switch.
-Exit 0 when 1-4 hold.
+  5. neither splunk-sim nor solarwinds-sim fired an alert during phase A (the existing tools
+     stay quiet while congestion creeps); alerts in later phases are listed (splunk-sim's
+     NodeNotReady is expected after the burst), and splunk-sim holds the NotReady/Ready events.
+Exit 0 when 1-5 hold.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
-import re
 import os
+import re
 import subprocess
 import sys
 import threading
 import time
 from datetime import datetime
 from pathlib import Path
+
+import httpx
 
 ROOT = Path(__file__).resolve().parents[1]
 CTX = ["--context", "kind-ocp-sim"]
@@ -178,8 +183,53 @@ def main() -> int:
     check(timeouts > 0, f"4. svc-prober logged {timeouts} i/o timeouts during the fault")
     ok &= timeouts > 0
 
+    # 5. the existing tools' alerts ------------------------------------------------------------
+    ok &= check_alerts(node, starts, order)
+
     print("\nPASS" if ok else "\nFAIL")
     return 0 if ok else 1
+
+
+def check_alerts(node: str, starts: dict, order: list[str]) -> bool:
+    """Alerts from splunk-sim (fired alerts) and solarwinds-sim (AlertHistory), by fault phase."""
+    a_start, a_end = starts["A"], starts.get("B", starts.get("clear", time.time()))
+    try:
+        with httpx.Client(timeout=15) as http:
+            fired = http.get("http://127.0.0.1:8089/services/alerts/fired_alerts/-", auth=("admin", "demo"),
+                             params={"output_mode": "json"}).raise_for_status().json()["entry"]
+            since = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(a_start))
+            history = http.post("http://127.0.0.1:17778/SolarWinds/InformationService/v3/Json/Query",
+                                auth=("watchtower", "watchtower"),
+                                json={"query": "SELECT TimeStamp, Message FROM Orion.AlertHistory "
+                                               f"WHERE EventType = 0 AND TimeStamp >= '{since}' ORDER BY TimeStamp"}
+                                ).raise_for_status().json()["results"]
+            ready = http.post("http://127.0.0.1:8089/services/search/jobs/export", auth=("admin", "demo"),
+                              data={"output_mode": "json", "search": "search index=ocp sourcetype=kube:events "
+                                    f"reason IN (NodeNotReady, NodeReady) involvedObject.name={node} "
+                                    f"earliest={int(a_start)} | stats count by reason"}).raise_for_status().text
+    except (httpx.HTTPError, KeyError, ValueError) as exc:
+        check(False, f"5. could not read the stand-ins' alerts ({type(exc).__name__}: {exc}); make up?")
+        return False
+    alerts = [(e["content"]["trigger_time"], "splunk-sim", e["content"]["savedsearch_name"]) for e in fired
+              if e["content"]["trigger_time"] >= a_start]
+    alerts += [(ts(h["TimeStamp"]), "solarwinds-sim", h["Message"]) for h in history]
+
+    def phase_of(t: float) -> str:
+        current = "before"
+        for p in order:
+            if t >= starts[p]:
+                current = p
+        return current
+
+    in_a = [a for a in alerts if a_start <= a[0] < a_end]
+    check(not in_a, f"5. no alert from splunk-sim or solarwinds-sim during phase A ({len(alerts)} during the whole run)")
+    for t, tool, what in sorted(alerts):
+        print(f"   {'!' if t < a_end else ' '} {hhmmss(t)} phase {phase_of(t):<5} {tool:<15} {what}")
+    counts = {json.loads(line)["result"]["reason"]: json.loads(line)["result"]["count"]
+              for line in ready.splitlines() if '"result"' in line}
+    print(f"   splunk-sim holds {node} NodeNotReady x{counts.get('NodeNotReady', 0)}, "
+          f"NodeReady x{counts.get('NodeReady', 0)} since the fault began (via the forwarder)")
+    return not in_a
 
 
 def check(cond: bool, text: str) -> None:

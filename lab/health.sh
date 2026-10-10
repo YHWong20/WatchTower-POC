@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 # Lab health check (the lab-control skill's list). Read-only. Exit 1 if any check fails.
-# Checks for parts built in later phases print SKIP until those parts exist.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 PROFILE="${WT_PROFILE:-lite}"
@@ -47,7 +46,9 @@ echo " simulators and bus"
 sims=(cisco-sim-1); [[ "$PROFILE" == "full" ]] && sims+=(cisco-sim-2)
 PYTHONPATH=. uv run --quiet python lab/check_sims.py "${sims[@]}" || fails=$((fails + 1))
 docker compose exec -T redis redis-cli ping 2>/dev/null | grep -q PONG && ok "redis PONG" || bad "redis not answering (make up)"
-curl -fs -m 3 -o /dev/null http://127.0.0.1:8089/ 2>/dev/null && warn "splunk-sim checks arrive with phase 3" || skip "splunk-sim, solarwinds-sim, forwarder: phase 3"
+
+echo " existing-tool stand-ins (splunk-sim, forwarder, solarwinds-sim)"
+uv run --quiet python lab/check_tools.py $(kind get nodes --name ocp-sim 2>/dev/null) || fails=$((fails + 1))
 
 echo " model"
 model="${WT_MODEL:-$([[ "$PROFILE" == lite ]] && echo gemma3:1b || echo gemma3:4b)}"

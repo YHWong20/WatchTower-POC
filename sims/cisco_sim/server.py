@@ -22,13 +22,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import asyncssh
-import uvicorn
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 from sims.cisco_sim.cli import format_log_line, run_command
 from sims.cisco_sim.model import Switch
 from sims.common import snmp
+from sims.common.state import http_server
 from wt.common.catalog import load_topology
 
 log = logging.getLogger("cisco-sim")
@@ -37,6 +37,8 @@ IF_TABLE = (1, 3, 6, 1, 2, 1, 2, 2, 1)
 IF_X_TABLE = (1, 3, 6, 1, 2, 1, 31, 1, 1, 1)
 SYSTEM = (1, 3, 6, 1, 2, 1, 1)
 CAT9300_48T = (1, 3, 6, 1, 4, 1, 9, 1, 2494)
+CPM_CPU = (1, 3, 6, 1, 4, 1, 9, 9, 109, 1, 1, 1, 1)
+MEM_POOL = (1, 3, 6, 1, 4, 1, 9, 9, 48, 1, 1, 1)
 
 
 def build_switch(name: str) -> Switch:
@@ -67,6 +69,16 @@ def mib(sw: Switch) -> dict[snmp.OID, snmp.Value]:
         SYSTEM + (6, 0): (snmp.OCTET_STRING, "Lab rack 1"),
         (1, 3, 6, 1, 2, 1, 2, 1, 0): (snmp.INTEGER, len(sw.ports)),
     }
+    # CISCO-PROCESS-MIB (CPU, one entry) and CISCO-MEMORY-POOL-MIB (Processor pool): what Orion polls
+    # for a Cisco node's CPU load and memory.
+    five_s, one_m, five_m = sw.cpu()
+    v[CPM_CPU + (6, 1)] = (snmp.GAUGE32, five_s)
+    v[CPM_CPU + (7, 1)] = (snmp.GAUGE32, one_m)
+    v[CPM_CPU + (8, 1)] = (snmp.GAUGE32, five_m)
+    used = 412_000_000 + 2_000_000 * len(sw.congestion)
+    v[MEM_POOL + (2, 1)] = (snmp.OCTET_STRING, "Processor")
+    v[MEM_POOL + (5, 1)] = (snmp.GAUGE32, used)
+    v[MEM_POOL + (6, 1)] = (snmp.GAUGE32, 1_598_000_000 - used)
     for i, p in sw.ports.items():
         up = 1 if p.oper_up else 2
         last_change = int((p.last_change - sw.booted) * 100)
@@ -97,7 +109,9 @@ def mib(sw: Switch) -> dict[snmp.OID, snmp.Value]:
 
 
 class SyslogOut:
-    """Sends each log line over UDP in IOS wire format: <PRI>seq: host: *timestamp: %MSG."""
+    """Sends each log line over UDP in IOS wire format: <PRI>seq: host: *timestamp: %MSG.
+    Lines logged before the collector's name resolves (the boot messages) are replayed once it
+    does, like a switch sending its logging buffer when the syslog host becomes reachable."""
 
     def __init__(self, sw: Switch, targets: list[tuple[str, int]]):
         self.sw = sw
@@ -105,10 +119,13 @@ class SyslogOut:
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.setblocking(False)
         self.resolved: dict[tuple[str, int], tuple[str, int]] = {}
+        first = sw.log_seq - len(sw.log) + 1
+        self.pending = [(line, first + i) for i, line in enumerate(sw.log)] if targets else []
         sw.listeners.append(self.send)
 
     async def resolve_forever(self) -> None:
         loop = asyncio.get_running_loop()
+        await asyncio.sleep(5)          # UDP has no retry: give a collector starting alongside time to listen
         while True:
             for host, port in self.targets:
                 try:
@@ -116,9 +133,17 @@ class SyslogOut:
                     self.resolved[(host, port)] = info[0][4]
                 except OSError:
                     self.resolved.pop((host, port), None)   # forwarder not up yet
-            await asyncio.sleep(30)
+            if self.resolved and self.pending:
+                backlog, self.pending = self.pending, []
+                for line, seq in backlog:
+                    self.send(line, seq)
+            await asyncio.sleep(30 if self.resolved else 2)
 
     def send(self, line, seq: int) -> None:
+        if not self.resolved:
+            if self.targets and len(self.pending) < 500:
+                self.pending.append((line, seq))
+            return
         pri = 23 * 8 + line.severity                            # facility local7
         msg = f"<{pri}>{format_log_line(line, seq).replace(': *', f': {self.sw.name}: *', 1)}"
         for addr in self.resolved.values():
@@ -309,7 +334,7 @@ async def serve(name: str | None = None) -> None:
     )
     await snmp.serve_agent(snmp.MibView(lambda: mib(sw)), port=snmp_port,
                            community=os.environ.get("SIM_COMMUNITY", "public"))
-    api = uvicorn.Server(uvicorn.Config(fault_api(sw), host="0.0.0.0", port=api_port, log_level="warning"))
+    api = http_server(fault_api(sw), api_port)
     log.info("%s up: ssh :%d, snmp :%d/udp, fault api :%d, syslog -> %s, connected ports %s",
              name, ssh_port, snmp_port, api_port, out.targets,
              ", ".join(p.short for p in sw.ports.values() if p.connected))

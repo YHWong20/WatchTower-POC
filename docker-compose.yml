@@ -1,7 +1,10 @@
 # WatchTower lab services. Everything joins the `kind` network so it can reach the cluster.
 #   lite (8 GB Mac):  docker compose --profile lite up -d    -> redis + wt-sims
 #   full (16 GB):     docker compose --profile full up -d    -> redis + one container per sim
-# Phase 3 adds splunk-sim, solarwinds-sim and the forwarder; phase 4 the agents.
+# Phase 4 adds the agents.
+# The forwarder reads logs inside the kind nodes through the Docker socket (a node log agent's
+# view) and Kubernetes events with its own events-only token from data/kubeconfig-forwarder.yaml.
+# WatchTower's own containers never get the socket.
 name: watchtower
 
 x-sim: &sim
@@ -10,6 +13,12 @@ x-sim: &sim
   networks: [kind]
   restart: unless-stopped
   sysctls: {net.ipv4.ip_unprivileged_port_start: 0}   # sims bind 22/161 as a non-root user
+  volumes: [sims-state:/var/lib/wt-sims]
+
+x-forwarder-volumes: &forwarder-volumes
+  - sims-state:/var/lib/wt-sims
+  - ./data:/lab-data:ro
+  - /var/run/docker.sock:/var/run/docker.sock
 
 services:
   redis:
@@ -24,12 +33,14 @@ services:
   wt-sims:
     <<: *sim
     profiles: [lite]
-    command: [python, -m, sims.run, cisco-sim-1]
+    command: [python, -m, sims.run, cisco-sim-1, splunk-sim, solarwinds-sim, forwarder]
     environment: {WT_PROFILE: lite, SIM_SYSLOG: "forwarder:5514"}
     networks:
-      kind: {aliases: [cisco-sim-1]}
-    ports: ["127.0.0.1:2221:22", "127.0.0.1:1611:161/udp", "127.0.0.1:9101:9101"]
-    mem_limit: 256m        # sized for phase 3, when splunk-sim, solarwinds-sim and the forwarder join
+      kind: {aliases: [cisco-sim-1, splunk, splunk-sim, solarwinds, solarwinds-sim, forwarder]}
+    ports: ["127.0.0.1:2221:22", "127.0.0.1:1611:161/udp", "127.0.0.1:9101:9101",
+            "127.0.0.1:8088:8088", "127.0.0.1:8089:8089", "127.0.0.1:17778:17778"]
+    volumes: *forwarder-volumes
+    mem_limit: 256m
 
   # ---------------------------------------------------------------- full: one container per sim
   cisco-sim-1:
@@ -48,6 +59,37 @@ services:
     ports: ["127.0.0.1:2222:22", "127.0.0.1:1612:161/udp", "127.0.0.1:9102:9101"]
     mem_limit: 96m
 
+  splunk-sim:
+    <<: *sim
+    profiles: [full]
+    command: [python, -m, sims.run, splunk-sim]
+    environment: {WT_PROFILE: full}
+    networks:
+      kind: {aliases: [splunk]}
+    ports: ["127.0.0.1:8088:8088", "127.0.0.1:8089:8089"]
+    mem_limit: 160m
+
+  solarwinds-sim:
+    <<: *sim
+    profiles: [full]
+    command: [python, -m, sims.run, solarwinds-sim]
+    environment: {WT_PROFILE: full}
+    networks:
+      kind: {aliases: [solarwinds]}
+    ports: ["127.0.0.1:17778:17778"]
+    mem_limit: 96m
+
+  forwarder:
+    <<: *sim
+    profiles: [full]
+    command: [python, -m, sims.run, forwarder]
+    environment: {WT_PROFILE: full}
+    volumes: *forwarder-volumes
+    mem_limit: 96m
+
 networks:
   kind:
     external: true
+
+volumes:
+  sims-state:

@@ -113,6 +113,10 @@ class Switch:
         self._last = self.booted
         self.advance()                      # three days of history so counters look lived-in
         self.syslog("SYS", 5, "RESTART", "System restarted --")
+        for p in self.ports.values():               # cabled ports come up after boot, as on a real switch
+            if p.connected:
+                self.syslog("LINK", 3, "UPDOWN", f"Interface {p.name}, changed state to up")
+                self.syslog("LINEPROTO", 5, "UPDOWN", f"Line protocol on Interface {p.name}, changed state to up")
 
     # ------------------------------------------------------------ time
 

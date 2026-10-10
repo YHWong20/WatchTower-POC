@@ -17,26 +17,43 @@ description: Bring the WatchTower Mac lab (kind HA "ocp-sim" cluster, svc-prober
    `kubectl --context kind-ocp-sim apply -k lab/k8s/` (metrics-server with `--kubelet-insecure-tls`,
    demo app, svc-prober DaemonSet on every node, read-only RBAC for the agents), waits for
    Ready, and writes the agents' read-only kubeconfig to `data/kubeconfig-agent.yaml`.
-3. `docker compose --profile $WT_PROFILE up -d --build`: redis plus the simulators (lite: one
-   `wt-sims` container; full: `cisco-sim-1`, `cisco-sim-2`). splunk-sim, solarwinds-sim and the
-   forwarder join in phase 3.
-4. Phase 3 onwards: confirm the forwarder ships node events: splunk-sim should hold a `Starting`
-   event for each node from cluster creation. The reboot check relies on these events, not on
-   the API (kind nodes share the Docker VM's kernel, so their boot IDs are identical anyway).
+3. `docker compose --profile $WT_PROFILE up -d --build`: redis plus the simulators and stand-ins
+   (lite: one `wt-sims` container running cisco-sim-1, splunk-sim, solarwinds-sim and the
+   forwarder; full: one container each, plus cisco-sim-2). State (splunk-sim events,
+   solarwinds-sim history, forwarder checkpoints) lives in the `sims-state` volume; `make down`
+   removes it.
+4. The forwarder needs `data/kubeconfig-forwarder.yaml` (events-only `splunk-forwarder` token,
+   written by `lab/up.sh`) and the Docker socket (it reads container logs and the kubelet journal
+   inside the kind nodes with `docker exec`, like a node log agent). On a fresh `make lab-up &&
+   make up` it ships each node's `Starting` events from cluster creation; Kubernetes keeps events
+   for 1 hour, so a forwarder started later only sees what happened since.
 
 Host ports (bound to 127.0.0.1): cisco-sim-1 SSH 2221, SNMP 1611/udp, fault API 9101;
 cisco-sim-2 2222, 1612/udp, 9102. SSH users `admin`/`demo` and `watchtower`/`watchtower`.
+splunk-sim REST 8089 (Bearer `wt-poc-token`, or basic `admin`/`demo`), HEC 8088 (`Splunk wt-hec-token`);
+solarwinds-sim SWIS 17778 (basic `watchtower`/`watchtower` or `admin`/`demo`).
+
+What lands in splunk-sim (index / sourcetype / host):
+| Source | index | sourcetype | host | Indexed fields |
+|---|---|---|---|---|
+| Kubernetes events (list + watch) | ocp | kube:events | source.host or `ocp-sim` | namespace, source_host |
+| Container logs, kube-system and wt-lab | ocp | kube:container:<container> | node | namespace, pod, container_name |
+| kubelet journal | ocp | kubelet | node | unit |
+| Switch syslog (UDP 5514) | network | cisco:ios | switch | (search time: facility, severity_id, mnemonic) |
+Saved searches (`sims/splunk_sim/saved_searches.yaml`, every 60 s): NodeNotReady, PodEvicted,
+SwitchInterfaceDown. solarwinds-sim alerts: utilisation > 90 % for 5 min, cabled interface
+down, node down; history in `Orion.AlertHistory`.
 
 ## Health check (run before any demo): `make health`
 - Nodes Ready (2 lite, 4 full) and `node-monitor-grace-period=40s`.
 - `kubectl top nodes` returns numbers for every node.
 - `kubectl -n wt-lab logs ds/svc-prober --tail=3` shows `ok` lines with latency in ms.
 - wt-agent RBAC is read-only (`kubectl auth can-i ... --as=system:serviceaccount:wt-lab:wt-agent`).
-- splunk-sim has data from every source (phase 3):
-  `curl -s -u admin:demo 'localhost:8089/services/search/jobs/export' -d search='search index=* earliest=-5m | stats count by sourcetype' -d output_mode=json`
-  must list kube:events, kubelet, kube:container:svc-prober, kube:container:etcd, cisco:ios.
-- solarwinds-sim has polled (phase 3): SWQL `SELECT TOP 1 DateTime FROM Orion.NPM.InterfaceErrors ORDER BY DateTime DESC` is under 2 min old.
-- No alerts fired in either stand-in (phase 3).
+- splunk-sim has fresh data from every source (`lab/check_tools.py`), e.g.
+  `curl -s -u admin:demo localhost:8089/services/search/jobs/export -d search='search index=* earliest=-5m | stats count by sourcetype' -d output_mode=json`
+  lists kube:container:svc-prober, kube:container:etcd, kube:container:kube-apiserver, kubelet, cisco:ios.
+- solarwinds-sim polled within 2.5 min (`curl -s -u watchtower:watchtower localhost:17778/SolarWinds/InformationService/v3/Json/Query -H 'content-type: application/json' -d '{"query":"SELECT Caption, LastSystemUpTimePollUtc FROM Orion.Nodes"}'`).
+- Alerts in either stand-in are warnings (NodeNotReady after a fault run is expected).
 - `ssh -p 2221 admin@localhost "show interfaces Gi1/0/13"` (password `demo`) returns IOS-style text;
   SNMP on 1611/udp answers (`snmpget -v2c -c public localhost:1611 IF-MIB::ifOutDiscards.13`).
 - No `netem` qdisc on any node.
@@ -56,7 +73,8 @@ master 2 and keeps both halves in step:
 `make fault [NODE=...] [MODE=investigate]` picks the node from the profile; phase start times
 go to `data/faults/last.jsonl`. `make verify-flap` runs the investigate fault and checks the
 flap end to end (NotReady then Ready, no Rebooted/Starting event, no evictions, svc-prober
-timeouts per phase). Measured on the lite lab: NotReady about 45 s into the burst, Ready again
+timeouts per phase, no splunk-sim or solarwinds-sim alert during phase A). Then
+`make verify-sources` runs every SPL/SWQL template in `contracts/sources.yaml` against the stand-ins. Measured on the lite lab: NotReady about 45 s into the burst, Ready again
 about 45 s after it ends (the kubelet has to drop its dead HTTP/2 connection first).
 The switch sim models congestion as rising output drops with **zero CRC**, average utilisation
 near 46%, and drops concentrated in one egress queue.
