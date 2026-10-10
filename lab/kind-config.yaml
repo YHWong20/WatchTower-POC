@@ -16,11 +16,15 @@ nodes:
     labels: {wt/role: master, wt/name: master-3}
   - role: worker                 # ocp-sim-worker          -> worker-1
     labels: {wt/role: worker, wt/name: worker-1}
-# Optional, to mirror OpenShift's default timings exactly (kind's defaults are already
-# 10 s status updates and a 40 s grace period):
-# kubeadmConfigPatches:
-#   - |
-#     kind: ClusterConfiguration
-#     controllerManager:
-#       extraArgs:
-#         node-monitor-grace-period: "40s"
+# Mirror OpenShift's node timings: NotReady after 40 s without a lease renewal. Kubernetes
+# >= 1.32 defaults to 50 s, so pin it. kubeadm v1beta4 takes extraArgs as a list, and the list
+# replaces kind's own, so kind's enable-hostpath-provisioner is restated here.
+kubeadmConfigPatches:
+  - |
+    kind: ClusterConfiguration
+    controllerManager:
+      extraArgs:
+        - name: enable-hostpath-provisioner
+          value: "true"
+        - name: node-monitor-grace-period
+          value: "40s"

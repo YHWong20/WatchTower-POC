@@ -1,0 +1,37 @@
+# A small workload on the worker, so "no evictions" in the incident report means something.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: demo-web
+  namespace: wt-lab
+  labels: {app: demo-web}
+spec:
+  replicas: 2
+  selector: {matchLabels: {app: demo-web}}
+  template:
+    metadata: {labels: {app: demo-web}}
+    spec:
+      containers:
+        - name: web
+          image: python:3.12-slim
+          imagePullPolicy: IfNotPresent
+          command: [python, -m, http.server, "8080", --directory, /tmp]
+          ports: [{containerPort: 8080}]
+          readinessProbe:
+            tcpSocket: {port: 8080}
+            periodSeconds: 10
+          resources:
+            requests: {cpu: 5m, memory: 16Mi}
+            limits: {memory: 48Mi}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: demo-web, namespace: wt-lab}
+spec:
+  selector: {app: demo-web}
+  ports: [{port: 80, targetPort: 8080}]

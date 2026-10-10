@@ -1,0 +1,53 @@
+# WatchTower lab services. Everything joins the `kind` network so it can reach the cluster.
+#   lite (8 GB Mac):  docker compose --profile lite up -d    -> redis + wt-sims
+#   full (16 GB):     docker compose --profile full up -d    -> redis + one container per sim
+# Phase 3 adds splunk-sim, solarwinds-sim and the forwarder; phase 4 the agents.
+name: watchtower
+
+x-sim: &sim
+  build: .
+  image: watchtower:dev
+  networks: [kind]
+  restart: unless-stopped
+  sysctls: {net.ipv4.ip_unprivileged_port_start: 0}   # sims bind 22/161 as a non-root user
+
+services:
+  redis:
+    image: redis:7-alpine
+    command: [redis-server, --save, "", --appendonly, "no", --maxmemory, 48mb, --maxmemory-policy, noeviction]
+    mem_limit: 64m
+    networks: [kind]
+    ports: ["127.0.0.1:6379:6379"]
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------- lite: one container for all sims
+  wt-sims:
+    <<: *sim
+    profiles: [lite]
+    command: [python, -m, sims.run, cisco-sim-1]
+    environment: {WT_PROFILE: lite, SIM_SYSLOG: "forwarder:5514"}
+    networks:
+      kind: {aliases: [cisco-sim-1]}
+    ports: ["127.0.0.1:2221:22", "127.0.0.1:1611:161/udp", "127.0.0.1:9101:9101"]
+    mem_limit: 256m        # sized for phase 3, when splunk-sim, solarwinds-sim and the forwarder join
+
+  # ---------------------------------------------------------------- full: one container per sim
+  cisco-sim-1:
+    <<: *sim
+    profiles: [full]
+    command: [python, -m, sims.run, cisco-sim-1]
+    environment: {WT_PROFILE: full, SIM_SYSLOG: "forwarder:5514"}
+    ports: ["127.0.0.1:2221:22", "127.0.0.1:1611:161/udp", "127.0.0.1:9101:9101"]
+    mem_limit: 96m
+
+  cisco-sim-2:
+    <<: *sim
+    profiles: [full]
+    command: [python, -m, sims.run, cisco-sim-2]
+    environment: {WT_PROFILE: full, SIM_SYSLOG: "forwarder:5514"}
+    ports: ["127.0.0.1:2222:22", "127.0.0.1:1612:161/udp", "127.0.0.1:9102:9101"]
+    mem_limit: 96m
+
+networks:
+  kind:
+    external: true

@@ -41,6 +41,7 @@ signals:
   pod_evictions:
     primary: splunk
     query: 'index=ocp sourcetype=kube:events reason IN (TaintManagerEviction, Evicted, Preempted) earliest=-{window}'
+    reading: Count only real evictions. TaintManagerEviction also says "Cancelling deletion of Pod ..." when the node returns before the 300 s toleration ends (seen in the lab after every flap); those mean nothing was evicted.
   etcd_latency:
     primary: splunk
     query: 'index=ocp sourcetype=kube:container:etcd host={node} ("apply request took too long" OR "slow fdatasync" OR "prober detected unhealthy status") earliest=-{window} | stats count by msg'

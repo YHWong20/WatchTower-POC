@@ -1,0 +1,11 @@
+.git
+.venv
+.claude
+.pytest_cache
+**/__pycache__
+data
+eval
+tests
+lab
+wireframes
+prompts

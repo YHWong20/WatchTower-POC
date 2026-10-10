@@ -6,29 +6,41 @@ description: Bring the WatchTower Mac lab (kind HA "ocp-sim" cluster, svc-prober
 # Lab control
 
 ## Bring up
+`make lab-up && make up` does all of this (`WT_PROFILE=lite` is the default; `full` needs 16 GB):
 1. `docker info >/dev/null` or ask the user to start OrbStack / Docker Desktop.
-2. `kind get clusters | grep -q ocp-sim || kind create cluster --name ocp-sim --config lab/kind-config.yaml`
-   (3 control-plane nodes + 1 worker; about 3 minutes on an M2 Air). On an 8 GB Mac use
-   `WT_PROFILE=lite` and `lab/kind-config-lite.yaml` instead (see below).
-3. `kubectl --context kind-ocp-sim apply -f lab/k8s/` (metrics-server with `--kubelet-insecure-tls`,
-   demo app, svc-prober DaemonSet on masters, read-only RBAC for the agents).
-4. `kubectl --context kind-ocp-sim wait --for=condition=Ready nodes --all --timeout=240s`
-5. `docker compose up -d redis cisco-sim-1 cisco-sim-2 splunk-sim solarwinds-sim forwarder`
-6. Confirm the forwarder ships node events: splunk-sim should hold a `Starting` event for each
-   node from cluster creation. The reboot check relies on these events, not on the API (kind
-   nodes share the Docker VM's kernel, so their boot IDs are identical anyway).
+2. `lab/up.sh`: creates kind `ocp-sim` from `lab/kind-config-lite.yaml` (lite) or
+   `lab/kind-config.yaml` (full, about 3 minutes on an M2 Air). Both pin
+   `node-monitor-grace-period=40s` (Kubernetes >= 1.32 defaults to 50 s; OpenShift uses 40 s).
+   It loads `python:3.12-slim` and metrics-server into the nodes from the Mac (`docker save
+   --platform` + `kind load image-archive`: plain `kind load docker-image` fails on
+   multi-platform images with "content digest ... not found"), then
+   `kubectl --context kind-ocp-sim apply -k lab/k8s/` (metrics-server with `--kubelet-insecure-tls`,
+   demo app, svc-prober DaemonSet on every node, read-only RBAC for the agents), waits for
+   Ready, and writes the agents' read-only kubeconfig to `data/kubeconfig-agent.yaml`.
+3. `docker compose --profile $WT_PROFILE up -d --build`: redis plus the simulators (lite: one
+   `wt-sims` container; full: `cisco-sim-1`, `cisco-sim-2`). splunk-sim, solarwinds-sim and the
+   forwarder join in phase 3.
+4. Phase 3 onwards: confirm the forwarder ships node events: splunk-sim should hold a `Starting`
+   event for each node from cluster creation. The reboot check relies on these events, not on
+   the API (kind nodes share the Docker VM's kernel, so their boot IDs are identical anyway).
 
-## Health check (run before any demo)
-- `kubectl top nodes` returns numbers for all 4 nodes.
+Host ports (bound to 127.0.0.1): cisco-sim-1 SSH 2221, SNMP 1611/udp, fault API 9101;
+cisco-sim-2 2222, 1612/udp, 9102. SSH users `admin`/`demo` and `watchtower`/`watchtower`.
+
+## Health check (run before any demo): `make health`
+- Nodes Ready (2 lite, 4 full) and `node-monitor-grace-period=40s`.
+- `kubectl top nodes` returns numbers for every node.
 - `kubectl -n wt-lab logs ds/svc-prober --tail=3` shows `ok` lines with latency in ms.
-- splunk-sim has data from every source:
+- wt-agent RBAC is read-only (`kubectl auth can-i ... --as=system:serviceaccount:wt-lab:wt-agent`).
+- splunk-sim has data from every source (phase 3):
   `curl -s -u admin:demo 'localhost:8089/services/search/jobs/export' -d search='search index=* earliest=-5m | stats count by sourcetype' -d output_mode=json`
   must list kube:events, kubelet, kube:container:svc-prober, kube:container:etcd, cisco:ios.
-- solarwinds-sim has polled: SWQL `SELECT TOP 1 DateTime FROM Orion.NPM.InterfaceErrors ORDER BY DateTime DESC` is under 2 min old.
-- No alerts fired in either stand-in.
-- `ssh -p 2221 admin@localhost "show interfaces Gi1/0/11"` returns IOS-style text.
-- `docker exec ocp-sim-control-plane2 tc qdisc show dev eth0` shows no `netem`.
-- `curl -s localhost:11434/api/tags` lists `WT_MODEL`.
+- solarwinds-sim has polled (phase 3): SWQL `SELECT TOP 1 DateTime FROM Orion.NPM.InterfaceErrors ORDER BY DateTime DESC` is under 2 min old.
+- No alerts fired in either stand-in (phase 3).
+- `ssh -p 2221 admin@localhost "show interfaces Gi1/0/13"` (password `demo`) returns IOS-style text;
+  SNMP on 1611/udp answers (`snmpget -v2c -c public localhost:1611 IF-MIB::ifOutDiscards.13`).
+- No `netem` qdisc on any node.
+- `curl -s localhost:11434/api/tags` lists `WT_MODEL` (a warning only: `WT_LLM=off` works without it).
 
 ## The fault
 `lab/faults/cp-congest.sh ocp-sim-control-plane2 [--investigate]` reproduces the real incident on
@@ -37,10 +49,15 @@ master 2 and keeps both halves in step:
 |---|---|---|---|
 | A creep (6 min) | delay 80ms 60ms, loss 3% | `congestion level=low` | some Service timeouts, drops rising, no alarms |
 | B worse (4 min) | delay 250ms 150ms, loss 12% | `level=medium` | lease update failures, etcd peer warnings |
-| C burst (75 s) | loss 70% | `level=high` | master 2 NotReady (40 s grace), then Ready |
+| C burst (75 s) | loss 90% (70% did not reliably miss the lease window) | `level=high` | master 2 NotReady (40 s grace), then Ready |
 | D partial (3 min) | as B | `level=medium` | node Ready, drops continue |
 | clear | remove netem | `clear` | back to normal |
 `--investigate` shortens A and B to 1 minute each for the incident-investigation demo.
+`make fault [NODE=...] [MODE=investigate]` picks the node from the profile; phase start times
+go to `data/faults/last.jsonl`. `make verify-flap` runs the investigate fault and checks the
+flap end to end (NotReady then Ready, no Rebooted/Starting event, no evictions, svc-prober
+timeouts per phase). Measured on the lite lab: NotReady about 45 s into the burst, Ready again
+about 45 s after it ends (the kubelet has to drop its dead HTTP/2 connection first).
 The switch sim models congestion as rising output drops with **zero CRC**, average utilisation
 near 46%, and drops concentrated in one egress queue.
 

@@ -36,12 +36,16 @@ Scope: Cisco + OpenShift only. See MASTER_PROMPT.md.
 
 ## Commands
 - `make lab-up` / `make lab-down`, `make up` / `make down`, `make logs`
-- `make fault NODE=ocp-sim-control-plane2 [MODE=investigate]`, `make clear`
+- `make health`, `make fault [NODE=…] [MODE=investigate]` (NODE defaults by profile), `make clear`,
+  `make verify-flap`
 - `make demo`, `make record NAME=…`, `make replay NAME=…`, `make eval`, `make test`
 
 ## Mac notes (MacBook Air M2)
 - Ollama runs natively; containers use `http://host.docker.internal:11434/v1`.
-- Agents join the `kind` network; API via `kind get kubeconfig --internal --name ocp-sim`.
+- Agents join the `kind` network; API via the read-only `data/kubeconfig-agent.yaml` (wt-agent
+  token, written by `make lab-up`), never the kind admin kubeconfig.
+- Load images into kind with `docker save --platform` + `kind load image-archive` (plain
+  `kind load docker-image` fails on multi-platform images).
 - kind's kubernetes Service VIP is 10.96.0.1 (OpenShift: 172.30.0.1). Display names
   master-1..3 come from topology.yaml.
 - No nested virtualisation on M2, so no VM-based network images.

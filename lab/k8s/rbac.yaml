@@ -1,0 +1,49 @@
+# Read-only access for the WatchTower agents: get/list/watch, nothing else. The agents use the
+# wt-agent token (lab/agent-kubeconfig.sh), never the kind admin kubeconfig.
+apiVersion: v1
+kind: ServiceAccount
+metadata: {name: wt-agent, namespace: wt-lab}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: wt-agent-token
+  namespace: wt-lab
+  annotations: {kubernetes.io/service-account.name: wt-agent}
+type: kubernetes.io/service-account-token
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata: {name: wt-readonly}
+rules:
+  - apiGroups: [""]
+    resources: [nodes, nodes/status, pods, events, namespaces, services, endpoints]
+    verbs: [get, list, watch]
+  - apiGroups: [events.k8s.io]
+    resources: [events]
+    verbs: [get, list, watch]
+  - apiGroups: [coordination.k8s.io]
+    resources: [leases]
+    verbs: [get, list, watch]
+  - apiGroups: [apps]
+    resources: [daemonsets, deployments, replicasets]
+    verbs: [get, list, watch]
+  - apiGroups: [discovery.k8s.io]
+    resources: [endpointslices]
+    verbs: [get, list, watch]
+  - apiGroups: [metrics.k8s.io]
+    resources: [nodes, pods]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata: {name: wt-agent-readonly}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: wt-readonly}
+subjects:
+  - {kind: ServiceAccount, name: wt-agent, namespace: wt-lab}
+---
+# svc-prober needs no permissions: /readyz is readable by any authenticated caller
+# (system:public-info-viewer). It still sends its token, like the real components do.
+apiVersion: v1
+kind: ServiceAccount
+metadata: {name: svc-prober, namespace: wt-lab}

@@ -1,0 +1,46 @@
+# svc-prober: one pod per node (hostNetwork) calling the kubernetes Service VIP every 5 s.
+# Full profile: the masters are the subject and the worker is a control. Lite profile: the
+# worker is the fault target, so it must run there too. Hence every node, not masters only.
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: svc-prober
+  namespace: wt-lab
+  labels: {app: svc-prober}
+spec:
+  selector: {matchLabels: {app: svc-prober}}
+  template:
+    metadata: {labels: {app: svc-prober}}
+    spec:
+      serviceAccountName: svc-prober
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      tolerations:
+        - {key: node-role.kubernetes.io/control-plane, operator: Exists, effect: NoSchedule}
+        - {key: node.kubernetes.io/not-ready, operator: Exists, effect: NoExecute}
+        - {key: node.kubernetes.io/unreachable, operator: Exists, effect: NoExecute}
+      containers:
+        - name: prober
+          image: python:3.12-slim
+          imagePullPolicy: IfNotPresent
+          command: [python, -u, /app/svc-prober.py]
+          env:
+            - name: NODE_NAME
+              valueFrom: {fieldRef: {fieldPath: spec.nodeName}}
+            - {name: TARGET, value: "https://10.96.0.1:443/readyz"}
+            - {name: INTERVAL_S, value: "5"}
+            - {name: TIMEOUT_S, value: "2"}
+          resources:
+            requests: {cpu: 5m, memory: 16Mi}
+            limits: {memory: 48Mi}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: script, mountPath: /app, readOnly: true}
+      volumes:
+        - name: script
+          configMap: {name: svc-prober}

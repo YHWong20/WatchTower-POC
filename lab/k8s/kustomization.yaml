@@ -1,0 +1,15 @@
+# Apply with: kubectl --context kind-ocp-sim apply -k lab/k8s/
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - rbac.yaml
+  - metrics-server.yaml
+  - svc-prober.yaml
+  - demo-app.yaml
+configMapGenerator:
+  - name: svc-prober
+    namespace: wt-lab
+    files: [svc-prober.py]
+generatorOptions:
+  disableNameSuffixHash: true
