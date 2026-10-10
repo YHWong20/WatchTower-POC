@@ -1,0 +1,22 @@
+name: lite-worker1-flap
+description: 'Recorded on the lite lab (make verify-flap, 2026-10-10): worker-1 flapped
+  NotReady for 36 s while cisco-sim-1 Gi1/0/13 was congested. Includes the per-queue
+  drops probe.'
+profile: lite
+request:
+  mode: incident_investigation
+  node: worker-1
+  alarm:
+    tool: splunk
+    name: NodeNotReady
+    entity: ocp-sim-worker
+  requested_by: eval
+expect:
+  top_key: network_path_congestion
+  min_confidence: 0.7
+  team: Network team
+  priority: P3
+  no_reboot: true
+  no_eviction: true
+  min_reuse: 0.85
+  max_probes: 1

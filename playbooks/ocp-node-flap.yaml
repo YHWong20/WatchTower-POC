@@ -30,14 +30,14 @@ hypotheses:
     key: network_path_congestion
     statement: Congestion on the node's switch path delays API traffic and lease renewals
     expect:
-      - {ev: api_timeouts_partial, ask: openshift, signal: api_svc_timeouts, predicate: "timeouts > 0 and success_rate between 0.2 and 0.8", weight: 2}
+      - {ev: api_timeouts_partial, ask: openshift, signal: api_svc_calls, predicate: "timeouts > 0 and success_rate between 0.2 and 0.8 (in the minutes with timeouts)", weight: 2}
       - {ev: lease_failures,      ask: openshift, signal: lease_update_failures, predicate: "count >= 2", weight: 1}
       - {ev: port_drops_rising,   ask: network,   signal: interface_discards, on: "topology.port_of({node})", predicate: "OutDiscards rising >= 3 polls", weight: 2}
       - {ev: drops_ongoing,       ask: network,   signal: interface_discards, predicate: "OutDiscards still rising in the latest 2 polls", weight: 1}
       - {ev: queue_drops,         ask: network,   signal: queue_drops, needs_live: true, predicate: "drops concentrated in one egress queue", weight: 1}
       - {ev: no_crc,              ask: network,   signal: interface_discards, predicate: "InErrors and OutErrors flat", weight: 1}
     refute:
-      - {ev: crc_rising, predicate: "CRC/InErrors rising", weight: 2, points_to: link_fault}
+      - {ev: crc_rising, ask: network, signal: interface_discards, predicate: "CRC/InErrors rising", weight: 2, points_to: link_fault}
     actions_catalogue: [top_talkers, queue_stats, lease_watch, check_peer_ports]
     escalate_to: network
 
@@ -48,7 +48,7 @@ hypotheses:
       - {ev: local_also_fails, ask: openshift, predicate: "calls to the local API server endpoint also time out", weight: 2}
       - {ev: ovn_errors,       ask: openshift, signal: ovn_errors, predicate: "count > 10", weight: 2}
     refute:
-      - {ev: api_timeouts_partial, predicate: "only calls that leave the node fail", weight: 2}
+      - {ev: api_timeouts_partial, ask: openshift, signal: api_svc_calls, predicate: "only calls that leave the node fail (partial failure)", weight: 2}
     escalate_to: platform
 
   - id: H3
@@ -57,7 +57,7 @@ hypotheses:
     expect:
       - {ev: etcd_fsync, ask: openshift, signal: etcd_latency, predicate: "'slow fdatasync' count > 0", weight: 2}
     refute:
-      - {ev: etcd_peer_only, predicate: "only peer/round-trip warnings, no fsync warnings", weight: 1}
+      - {ev: etcd_peer_only, ask: openshift, signal: etcd_latency, predicate: "only peer/round-trip warnings, no fsync warnings", weight: 1}
     escalate_to: platform
 
   - id: H4
@@ -67,7 +67,7 @@ hypotheses:
       - {ev: node_pressure, ask: openshift, signal: node_pressure, predicate: "any pressure or SystemOOM event", weight: 2}
       - {ev: node_cpu_high, ask: openshift, signal: node_cpu_memory, predicate: "CPU > 90% (if the node is in SolarWinds)", weight: 1}
     refute:
-      - {ev: node_healthy, predicate: "no pressure events, and CPU < 60% where SolarWinds has it", weight: 2}
+      - {ev: node_healthy, ask: openshift, signal: node_pressure, predicate: "no pressure events, and CPU < 60% where SolarWinds has it", weight: 2}
     escalate_to: platform
 
   - id: H5
@@ -75,9 +75,9 @@ hypotheses:
     optional: true
     statement: API servers overloaded (all nodes affected, not one)
     expect:
-      - {ev: all_nodes_timeouts, ask: openshift, predicate: "timeouts from every master", weight: 2}
+      - {ev: all_nodes_timeouts, ask: openshift, signal: api_svc_timeouts_by_node, predicate: "timeouts from every master", weight: 2}
     refute:
-      - {ev: one_node_only, predicate: "only {node} sees timeouts", weight: 2}
+      - {ev: one_node_only, ask: openshift, signal: api_svc_timeouts_by_node, predicate: "only {node} sees timeouts", weight: 2}
     escalate_to: platform
 
 confidence:

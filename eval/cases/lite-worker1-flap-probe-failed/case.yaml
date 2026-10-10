@@ -1,0 +1,22 @@
+name: lite-worker1-flap-probe-failed
+description: 'Recorded on the lite lab (first full-length run, 2026-10-10): the per-queue
+  drops probe failed (no local user in the container), so H1 has 7 of 8 expected weight.
+  The ranking must hold without the probe.'
+profile: lite
+request:
+  mode: incident_investigation
+  node: worker-1
+  alarm:
+    tool: splunk
+    name: NodeNotReady
+    entity: ocp-sim-worker
+  requested_by: eval
+expect:
+  top_key: network_path_congestion
+  min_confidence: 0.7
+  team: Network team
+  priority: P3
+  no_reboot: true
+  no_eviction: true
+  min_reuse: 0.85
+  max_probes: 1

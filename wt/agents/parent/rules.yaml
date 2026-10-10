@@ -1,0 +1,23 @@
+# Parent Agent: correlation scoring and investigation triggers. Deterministic; thresholds here.
+correlation:
+  window_s: 600              # signals within 10 minutes of each other are grouped
+  close_after_s: 900         # a watch item with no signal for 15 minutes closes
+  single_domain:
+    base: 0.20               # one domain only stays low
+    per_extra_rule: 0.05
+    max: 0.35
+  cross_domain:              # two domains linked by topology.yaml
+    base: 0.50
+    per_extra_rule: 0.05     # each rule beyond the first two
+    persistence: 0.05        # both domains still signalling after 3 minutes
+    persistence_after_s: 180
+    max: 0.69                # weak signals alone never reach 0.7
+  state_change: 0.90         # e.g. the node went NotReady
+
+investigate:
+  confidence: 0.70           # a watch item at or above this opens an investigation
+  on_state_change: true      # a node changing state opens one (incident mode)
+  dedupe_s: 900              # reuse an investigation for the same node opened within 15 minutes
+  window: 30m                # evidence window ("-30m to now")
+  evidence_timeout_s: 90
+  wait_for_ready_s: 240      # a node still NotReady: re-check NotReady/Ready every 20 s for this long

@@ -17,23 +17,33 @@ hypotheses:
     key: microburst_congestion
     statement: Bursty traffic overflows the egress queue while average utilisation looks normal
     expect:
-      - {ev: drops_rising, signal: interface_discards, predicate: "OutDiscards rising", weight: 2}
-      - {ev: util_normal,  signal: interface_utilisation, predicate: "average < 70%", weight: 1}
-      - {ev: queue_drops,  signal: queue_drops, needs_live: true, predicate: "drops in one queue", weight: 2}
-      - {ev: no_crc,       signal: interface_discards, predicate: "errors flat", weight: 1}
+      - {ev: drops_rising, ask: network, signal: interface_discards, predicate: "OutDiscards rising", weight: 2}
+      - {ev: util_normal,  ask: network, signal: interface_utilisation, predicate: "average < 70%", weight: 1}
+      - {ev: queue_drops,  ask: network, signal: queue_drops, needs_live: true, predicate: "drops in one queue", weight: 2}
+      - {ev: no_crc,       ask: network, signal: interface_discards, predicate: "errors flat", weight: 1}
+    refute:
+      - {ev: crc_rising, ask: network, signal: interface_discards, predicate: "InErrors rising", weight: 2, points_to: link_fault}
+      - {ev: util_high,  ask: network, signal: interface_utilisation, predicate: "average > 85%", weight: 2, points_to: sustained_overload}
+    actions_catalogue: [queue_stats, top_talkers, policy_check]
     escalate_to: network
   - id: H2
     key: link_fault
     statement: Physical link fault (cable, optic)
     expect:
-      - {ev: crc_rising, signal: interface_discards, predicate: "InErrors rising", weight: 2}
-      - {ev: link_flaps, signal: switch_syslog, predicate: "%LINK-3-UPDOWN for the port", weight: 2}
+      - {ev: crc_rising, ask: network, signal: interface_discards, predicate: "InErrors rising", weight: 2}
+      - {ev: link_flaps, ask: network, signal: switch_syslog, predicate: "%LINK-3-UPDOWN for the port", weight: 2}
+    refute:
+      - {ev: no_crc, ask: network, signal: interface_discards, predicate: "errors flat", weight: 2}
+    actions_catalogue: [queue_stats, top_talkers]
     escalate_to: network
   - id: H3
     key: sustained_overload
     statement: Port is simply saturated
     expect:
-      - {ev: util_high, signal: interface_utilisation, predicate: "average > 85%", weight: 3}
+      - {ev: util_high, ask: network, signal: interface_utilisation, predicate: "average > 85%", weight: 3}
+    refute:
+      - {ev: util_normal, ask: network, signal: interface_utilisation, predicate: "average < 70%", weight: 3}
+    actions_catalogue: [top_talkers, policy_check]
     escalate_to: network
 
 cross_domain:

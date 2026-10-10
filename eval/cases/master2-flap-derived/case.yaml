@@ -1,0 +1,23 @@
+name: master2-flap-derived
+description: DERIVED from lite-worker1-flap by eval/derive_master2.py (names mapped
+  to master-2 / Gi1/0/11, 2-in-3 Service call pattern, etcd on the node, one flap).
+  The full profile needs 16 GB; replace with a recording from a 16 GB machine.
+profile: full
+request:
+  mode: incident_investigation
+  node: master-2
+  alarm:
+    tool: splunk
+    name: NodeNotReady
+    entity: ocp-sim-control-plane2
+  requested_by: eval
+expect:
+  top_key: network_path_congestion
+  min_confidence: 0.7
+  team: Network team
+  priority: P3
+  no_reboot: true
+  no_eviction: true
+  min_reuse: 0.85
+  max_probes: 1
+derived: true

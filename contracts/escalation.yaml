@@ -21,6 +21,8 @@ priority_rules:            # evaluated top to bottom; first match wins
 route_by_top_hypothesis:
   network_path_congestion: network
   link_fault: network
+  microburst_congestion: network
+  sustained_overload: network
   sdn_datapath_fault: platform
   etcd_slow_disk: platform
   node_resource_starvation: platform

@@ -43,6 +43,17 @@ Use the words "transient NotReady (node flap)", not "the node went down", unless
 - If the top hypothesis is below 0.4, say "inconclusive", list what is missing, and recommend
   the evidence to gather next.
 
+## Where things are
+- Predicates in code: `wt/agents/parent/predicates.py`, keyed by the playbook item's `ev` name.
+  An item without one goes to the LLM "interpret" job (job 3), or stays missing.
+- Probe budget: only `needs_live` items probe; facts may fall back to a probe while
+  `max_probes_per_investigation` allows; other expectations never probe (missing instead).
+- Investigator: `wt/agents/parent/investigator.py`; LLM jobs and guards: `wt/common/jobs.py`.
+  The model's wording is used only if it keeps every rule fact (duration, reboot, restarts,
+  evictions); its ±0.10 adjustment is kept either way.
+
 ## Tests
-`eval/cases/*.yaml`: recorded evidence plus the expected top hypothesis, confidence band and
-escalation. `make eval` runs them with the LLM on and off.
+`eval/cases/<name>/`: `evidence.jsonl` (recorded EvidenceResults, from WT_RECORD_EVIDENCE via
+`eval/make_case.py`) and `case.yaml` (request + expected top hypothesis, confidence, escalation,
+reuse). `tests/test_investigation.py` runs every case with the LLM off and with a fake LLM that
+adjusts by -0.10 (`make verify-investigation`); `make eval` (phase 8) adds the real model.
