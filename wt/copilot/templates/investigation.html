@@ -10,7 +10,7 @@
    <div class="muted small"><b>{{ inv.trigger.requested_by or 'WatchTower' }}</b>{% if inv.trigger.alarm %} · alarm {{ inv.trigger.alarm.tool }} {{ inv.trigger.alarm.name }} on {{ inv.trigger.alarm.entity }}{% endif %} · opened {{ inv.opened_at.strftime('%H:%M:%S') }} UTC · playbook {{ inv.playbook }}</div>
    <div style="font-size:21px;font-weight:bold;margin:8px 0 6px">Likely cause: {{ inv.conclusion.likely_cause }}</div>
    <div style="font-size:13.5px;line-height:1.5">{{ inv.conclusion.what_happened }}</div>
-   <div class="muted small" style="margin-top:6px">refs {% for r in inv.conclusion.refs %}<a href="#{{ r }}">{{ r }}</a>{{ ', ' if not loop.last }}{% endfor %}{% if inv.llm_used %} · worded with the model (facts from rules){% else %} · rule-based (model off or not needed){% endif %}</div>
+   <div class="muted small" style="margin-top:6px">refs {% for r in inv.conclusion.refs %}<a href="#{{ r }}">{{ r }}</a>{{ ', ' if not loop.last }}{% endfor %}{% if inv.llm_used %} · model-assisted (wording, ±0.10 adjustment, extra hypotheses, step choice); facts and scores from rules{% else %} · rule-based (model off or not needed){% endif %}</div>
   </div>
   <div style="text-align:right;min-width:300px">
    <span class="pill {{ 'p-red' if inv.conclusion.confidence_label == 'high' else 'p-amb' if inv.conclusion.confidence_label == 'medium' else 'p-grey' }}" style="font-size:13px">CONFIDENCE: {{ inv.conclusion.confidence_label|upper }} {{ '%.2f'|format(top.confidence) }}</span>
