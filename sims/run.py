@@ -10,8 +10,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import signal
 import sys
+
+from wt.common.web import stop_on_signals
 
 
 async def main(names: list[str]) -> None:
@@ -36,9 +37,7 @@ async def main(names: list[str]) -> None:
         else:
             raise SystemExit(f"unknown sim {name!r}: cisco-sim-<n>, splunk-sim, solarwinds-sim or forwarder")
     task = asyncio.ensure_future(asyncio.gather(*jobs))
-    loop = asyncio.get_running_loop()
-    for sig in (signal.SIGTERM, signal.SIGINT):
-        loop.add_signal_handler(sig, task.cancel)       # one stop for every server in the process
+    stop_on_signals(task)                                # clean server shutdown, then the rest
     try:
         await task
     except asyncio.CancelledError:

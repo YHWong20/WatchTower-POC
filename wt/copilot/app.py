@@ -62,6 +62,23 @@ def sparkline(points: list[tuple[float, float]], width: int = 220, height: int =
             f'<polyline points="{xy}" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>')
 
 
+class Clock:
+    """Wall-clock time, or the recording's time while replaying (set by wt/replay/player.py)."""
+
+    def __init__(self) -> None:
+        self.store: Store | None = None           # replay: read "replay:now" from this store
+
+    def now(self) -> float:
+        if self.store is not None:
+            t = self.store.kv_get("replay:now")
+            if t:
+                return float(t)
+        return time.time()
+
+
+CLOCK = Clock()
+
+
 def hhmm(value: Any) -> str:
     if value is None:
         return ""
@@ -78,7 +95,7 @@ def ago(value: Any) -> str:
     if value is None:
         return "never"
     t = value if isinstance(value, (int, float)) else datetime.fromisoformat(str(value).replace("Z", "+00:00")).timestamp()
-    s = time.time() - t
+    s = CLOCK.now() - t
     if s < 90:
         return f"{int(s)} s ago"
     if s < 5400:
@@ -99,8 +116,9 @@ def code_spans(text: str) -> str:
 class Copilot:
     def __init__(self, settings: Settings, bus: Bus | None, store: Store | None = None,
                  splunk: SplunkClient | None = None, solarwinds: SolarWindsClient | None = None,
-                 llm: LLMClient | None = None, agent_urls: list[str] | None = None):
+                 llm: LLMClient | None = None, agent_urls: list[str] | None = None, replay: dict | None = None):
         self.settings = settings
+        self.replay = replay                      # {"name", "speed", "recorded"} in replay mode
         self.bus = bus
         self.store = store or Store(settings.db_path)
         audit = Audit(self.store)
@@ -110,13 +128,19 @@ class Copilot:
         self.solarwinds = solarwinds or SolarWindsClient(settings.solarwinds_url, settings.solarwinds_user,
                                                          settings.solarwinds_password, sources, audit, actor="copilot")
         self.llm = llm or (LLMClient(settings.llm_base_url, settings.llm_model, audit, self.store,
-                                     timeout_s=settings.llm_timeout_s, actor="copilot")
+                                     timeout_s=settings.llm_timeout_s, actor="copilot", api_key=settings.llm_api_key)
                            if settings.llm_enabled else None)
         self.agent_urls = agent_urls if agent_urls is not None else [
             u for u in os.environ.get("WT_AGENT_URLS", "http://127.0.0.1:8101,http://127.0.0.1:8102,"
                                                        "http://127.0.0.1:8103").split(",") if u]
         self.cache: dict[str, tuple[float, Any]] = {}
         self.http = httpx.AsyncClient(timeout=3)
+        if replay:
+            self.llm = None                       # a replay needs neither the lab nor the model
+            CLOCK.store = self.store
+
+    def now(self) -> float:
+        return CLOCK.now()
 
     async def cached(self, key: str, ttl: float, fn):
         hit = self.cache.get(key)
@@ -129,13 +153,17 @@ class Copilot:
     # ------------------------------------------------------------ data
 
     async def alarms(self) -> dict[str, Any]:
+        if self.replay:
+            return self.store.kv_get("replay:alarms", {"splunk": [], "solarwinds": [], "splunk_ok": True,
+                                                       "solarwinds_ok": True, "splunk_last": None})
+
         async def load():
             out: dict[str, Any] = {"splunk": [], "solarwinds": [], "splunk_ok": True, "solarwinds_ok": True,
                                    "splunk_last": None}
             try:
                 rows = (await self.splunk.fired_alert_instances()).rows
                 out["splunk_last"] = max((r.get("trigger_time", 0) for r in rows), default=None)
-                out["splunk"] = [r for r in rows if r.get("trigger_time", 0) > time.time() - 6 * 3600]
+                out["splunk"] = [r for r in rows if r.get("trigger_time", 0) > self.now() - 6 * 3600]
                 for r in out["splunk"]:                       # the entity WatchTower can investigate: a node
                     ents = [e.strip() for e in str(r.get("entity") or "").split(",") if e.strip()]
                     r["node"] = next((e for e in ents if self.node_of(e)), ents[0] if ents else "")
@@ -155,6 +183,9 @@ class Copilot:
             return None
 
     async def agents(self) -> list[dict[str, Any]]:
+        if self.replay:
+            return self.store.kv_get("replay:agents", [])
+
         async def one(url: str) -> dict[str, Any]:
             try:
                 return (await self.http.get(f"{url}/health")).json()
@@ -163,6 +194,8 @@ class Copilot:
         return await self.cached("agents", 5, lambda: asyncio.gather(*(one(u) for u in self.agent_urls)))
 
     async def llm_status(self) -> str:
+        if self.replay:
+            return "replay"
         if not self.llm:
             return "off"
 
@@ -178,13 +211,14 @@ class Copilot:
 
     def watch_items(self) -> list[WatchItem]:
         items = [WatchItem.model_validate(r) for r in self.store.list_watch_items(limit=50)]
-        recent = datetime.now(UTC) - timedelta(hours=2)
+        recent = datetime.fromtimestamp(self.now(), UTC) - timedelta(hours=2)
         items = [i for i in items if i.status not in ("dismissed",) and (i.status != "closed" or i.updated_at > recent)]
         rank = {"investigating": 0, "emerging": 1, "watching": 2, "closed": 3}
         return sorted(items, key=lambda i: (rank.get(i.status, 4), -i.confidence))
 
     def series(self, metric: str, entity: str, minutes: int = 60) -> list[tuple[float, float]]:
-        return self.store.samples(metric, entity, time.time() - minutes * 60)
+        now = self.now()
+        return [(t, v) for t, v in self.store.samples(metric, entity, now - minutes * 60) if t <= now]
 
     def cards(self, item: WatchItem) -> list[dict[str, Any]]:
         out = []
@@ -207,7 +241,8 @@ class Copilot:
         inv = self.store.get_investigation(inv_id) if inv_id else None
         if inv is None and not inv_id:
             recent = self.store.list_investigations(limit=1)
-            inv = recent[0] if recent and recent[0].opened_at > datetime.now(UTC) - timedelta(hours=3) else None
+            inv = (recent[0] if recent and recent[0].opened_at > datetime.fromtimestamp(self.now(), UTC) - timedelta(hours=3)
+                   else None)
         if inv:
             ctx.append((inv.id, f"Conclusion: {inv.conclusion.likely_cause}. {inv.conclusion.what_happened}"))
             ctx += [(e.id, f"{e.source}: {e.finding}") for e in inv.evidence]
@@ -264,6 +299,16 @@ class Copilot:
 
     async def request_investigation(self, **fields: Any) -> str:
         request_id = uuid.uuid4().hex[:12]
+        if self.replay:                           # no Parent Agent: open what the recording investigated
+            entity = fields.get("node") or (fields.get("alarm") or {}).get("entity") or ""
+            node = self.node_of(entity) if entity else None
+            for inv in self.store.list_investigations(limit=50):
+                text = " ".join([inv.conclusion.likely_cause, inv.trigger.requested_by or "",
+                                 (inv.trigger.alarm.entity if inv.trigger.alarm else "") or ""])
+                if node is None or node in text or entity in text:
+                    self.store.kv_put(f"request:{request_id}", {"investigation_id": inv.id})
+                    break
+            return request_id
         if self.bus:
             await self.bus.publish(streams.SRE, {"type": "investigate", "request_id": request_id, **fields})
         return request_id
@@ -281,7 +326,7 @@ def create_app(settings: Settings, bus: Bus | None, copilot: Copilot | None = No
         alarms = await cp.alarms()
         return {"request": request, "subtitle": subtitle, "llm": await cp.llm_status(),
                 "splunk_ok": alarms["splunk_ok"], "solarwinds_ok": alarms["solarwinds_ok"],
-                "now": datetime.now(UTC).strftime("%H:%M:%S")}
+                "now": datetime.fromtimestamp(cp.now(), UTC).strftime("%H:%M:%S"), "replay": cp.replay}
 
     # -------------------------------------------------------- proactive watch
 
@@ -367,7 +412,7 @@ def create_app(settings: Settings, bus: Bus | None, copilot: Copilot | None = No
         rid = await cp.request_investigation(
             node=node or None, switch=switch or None, port=port or None, watch_item_id=watch_item_id or None,
             alarm=alarm, force=bool(force),
-            requested_by=f"SRE via Copilot, {datetime.now(UTC).strftime('%H:%M')} UTC"
+            requested_by=f"SRE via Copilot, {datetime.fromtimestamp(cp.now(), UTC).strftime('%H:%M')} UTC"
                          + (f': "{alarm_tool.title()} alert {alarm_name} on {alarm_entity}. Investigate."' if alarm else ""))
         target = f"/pending/{rid}"
         if request.headers.get("hx-request"):
@@ -449,8 +494,25 @@ def create_app(settings: Settings, bus: Bus | None, copilot: Copilot | None = No
         ans, by = await cp.ask(q, inv_id or None)
         return tpl.TemplateResponse(request, "partials/answer.html", {"q": q, "a": ans, "by": by, "inv_id": inv_id})
 
+    @app.get("/api/alarms")
+    async def api_alarms():
+        return await cp.alarms()
+
+    @app.get("/api/agents")
+    async def api_agents():
+        return await cp.agents()
+
+    @app.get("/api/samples")
+    async def api_samples(since: float = 0):
+        """Metric samples written after `since` (epoch), for make record."""
+        return [list(r) for r in cp.store.samples_since(since)]
+
+    @app.get("/api/now")
+    async def api_now():
+        return {"now": cp.now(), "replay": cp.replay}
+
     @app.get("/health")
     async def health():
-        return {"agent": "copilot", "status": "ok"}
+        return {"agent": "copilot", "status": "ok", "replay": bool(cp.replay)}
 
     return app

@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import signal
 import sys
 
 from wt.common.config import settings
@@ -21,41 +20,44 @@ PORTS = {"network-agent": 8101, "openshift-agent": 8102, "parent-agent": 8103, "
 
 async def main(names: list[str]) -> None:
     from wt.common.bus import Bus
-    from wt.common.web import http_server
+    from wt.common.web import http_server, stop_on_signals
 
     cfg = settings()
     bus = Bus.from_url(cfg.redis_url)
     jobs = []
+    servers = []
+
+    def serve(app, port):
+        servers.append(http_server(app, port))
+        return servers[-1].serve()
     for name in names:
         if name == "network-agent":
             from wt.agents.base import AgentContext
             from wt.agents.network.agent import NetworkAgent
 
             agent = NetworkAgent(AgentContext.build(cfg, name, bus))
-            jobs += [agent.watch_loop(), agent.task_loop(), http_server(agent.app(), PORTS[name]).serve()]
+            jobs += [agent.watch_loop(), agent.task_loop(), serve(agent.app(), PORTS[name])]
         elif name == "openshift-agent":
             from wt.agents.base import AgentContext
             from wt.agents.openshift.agent import OpenShiftAgent
 
             agent = OpenShiftAgent(AgentContext.build(cfg, name, bus))
-            jobs += [agent.watch_loop(), agent.task_loop(), http_server(agent.app(), PORTS[name]).serve()]
+            jobs += [agent.watch_loop(), agent.task_loop(), serve(agent.app(), PORTS[name])]
         elif name == "parent-agent":
             from wt.agents.parent.agent import ParentAgent
 
             parent = ParentAgent.build(cfg, bus)
-            jobs += [parent.run(), http_server(parent.app(), PORTS[name]).serve()]
+            jobs += [parent.run(), serve(parent.app(), PORTS[name])]
         elif name == "copilot":
             from wt.copilot.app import create_app
 
-            jobs.append(http_server(create_app(cfg, bus), PORTS[name]).serve())
+            jobs.append(serve(create_app(cfg, bus), PORTS[name]))
         else:
             raise SystemExit(f"unknown agent {name!r}: {', '.join(PORTS)}")
     logging.getLogger("wt").info("WatchTower %s up (profile %s, LLM %s)", ", ".join(names), cfg.profile.name,
                                  f"{cfg.llm_model} at {cfg.llm_base_url}" if cfg.llm_enabled else "off")
     task = asyncio.ensure_future(asyncio.gather(*jobs))
-    loop = asyncio.get_running_loop()
-    for sig in (signal.SIGTERM, signal.SIGINT):
-        loop.add_signal_handler(sig, task.cancel)
+    stop_on_signals(task, servers)
     try:
         await task
     except asyncio.CancelledError:

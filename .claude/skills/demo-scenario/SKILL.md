@@ -32,8 +32,19 @@ told on worker-1, and the master-specific "2 in 3" detail is shown from the slid
 Short version for a tight slot: `make fault NODE=ocp-sim-control-plane2 MODE=investigate`
 (flap at about 3 minutes), show Mode 2 only.
 
+## What the commands do
+- `make demo [MODE=investigate] [NAME=x]`: preflight (`make health`, waits for open watch items
+  to close), records to `demo/recordings/<NAME>`, runs the fault through the Copilot with every
+  definition-of-done check printed (lab/verify_copilot.py), keeps recording 30 s after the report.
+- `make record NAME=x`: records until Ctrl-C (all six wt.* streams, the stand-ins' alerts and
+  the agents' status every 10 s, sparkline samples).
+- `make stop && make replay NAME=x [SPEED=10]`: fresh Redis (wt-replay-redis on :6390), player +
+  projector + Copilot in replay mode on :8080 (recording clock, no LLM, no Splunk/SolarWinds).
+  `SPEED=0` jumps to the end state. `make up` brings the live lab back.
+- On the 8 GB Mac the storyline runs on worker-1 / Gi1/0/13 (lite profile).
+
 ## Fallbacks
-- Lab not behaving: `make replay NAME=builders-day` (replays recorded bus events at 10x).
+- Lab not behaving: `make stop && make replay NAME=rehearsal` (the recorded rehearsal at 10x).
 - LLM slow or wrong: toggle `WT_LLM=off`; the rule-based explanation and ranking still show.
 - No laptop: walk through `wireframes/*.png` in the deck.
 

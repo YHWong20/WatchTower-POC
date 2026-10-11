@@ -1,0 +1,16 @@
+{
+ "name": "rehearsal",
+ "profile": "lite",
+ "started": 1791689296.6189811,
+ "ended": 1791690082.348407,
+ "events": {
+  "alarms": 77,
+  "agents": 77,
+  "samples": 29,
+  "wt.signals": 20,
+  "wt.watch": 21,
+  "wt.investigations": 24,
+  "wt.tasks": 17,
+  "wt.evidence": 17
+ }
+}

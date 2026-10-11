@@ -67,6 +67,8 @@ def main() -> int:
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))   # stopped from outside: still clear the fault
     ap = argparse.ArgumentParser()
     ap.add_argument("--no-screenshots", action="store_true")
+    ap.add_argument("--investigate", action="store_true",
+                    help="short fault (flap at ~3 min): checks the incident investigation only")
     args = ap.parse_args()
     snap = (lambda *a, **k: None) if args.no_screenshots else shot
     profile = os.environ.get("WT_PROFILE", "lite")
@@ -76,22 +78,24 @@ def main() -> int:
     before = {i["id"] for i in json.loads(subprocess.run(
         ["curl", "-s", "http://127.0.0.1:8103/health"], capture_output=True, text=True).stdout or "{}").get("running", [])}
     log = open(ROOT / "data" / "faults" / "verify-copilot.log", "w")
-    print(f"fault on {kind_node} (full length: A 6 min, B 4 min, burst 75 s, D 3 min)", flush=True)
-    fault = subprocess.Popen([str(ROOT / "lab/faults/cp-congest.sh"), kind_node], cwd=ROOT, stdout=log,
+    print(f"fault on {kind_node} ({'short: A and B 1 min each' if args.investigate else 'full length: A 6 min, B 4 min'}"
+          ", burst 75 s, D 3 min)", flush=True)
+    fault = subprocess.Popen([str(ROOT / "lab/faults/cp-congest.sh"), kind_node] + (["--investigate"] if args.investigate else []),
+                             cwd=ROOT, stdout=log,
                              stderr=subprocess.STDOUT, start_new_session=True)
     start = time.time()
     try:
         # ---------------------------------------------------------------- proactive watch
-        print("\n proactive watch", flush=True)
+        print("\n proactive watch" + (" (skipped: short fault)" if args.investigate else ""), flush=True)
         item = None
-        while time.time() - start < 360:
+        while not args.investigate and time.time() - start < 360:
             watch = text(http.get("/partials/watch").text)
             m = re.search(r"EMERGING · cross-domain (WI-\d+).*?Confidence: \w+ \(([\d.]+)\)\s*(.*?)\s{0,2}No service impact", watch)
             if m and node in m.group(3) and float(m.group(2)) >= 0.5:
                 item = (m.group(1), float(m.group(2)), m.group(3).strip(), time.time() - start)
                 break
             time.sleep(10)
-        if check(item is not None, f"cross-domain watch item for {node} at >= 0.5 within 6 min"
+        if not args.investigate and check(item is not None, f"cross-domain watch item for {node} at >= 0.5 within 6 min"
                  + (f": {item[0]} after {item[3]:.0f} s, confidence {item[1]}, \"{item[2]}\"" if item else "")):
             new = [m for m in re.finditer(r'data-alarm="([^"]+)" (?:data-entity="[^"]*" )?data-trigger="([^"]+)"',
                                           http.get("/partials/alarms").text)

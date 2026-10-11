@@ -102,7 +102,7 @@ class ParentAgent:
         playbooks = load_playbooks(settings.playbooks_dir)
         escalation = load_escalation(settings.contracts_dir)
         llm = LLMClient(settings.llm_base_url, settings.llm_model, audit, store, enabled=settings.llm_enabled,
-                        timeout_s=settings.llm_timeout_s, actor="parent-agent")
+                        timeout_s=settings.llm_timeout_s, actor="parent-agent", api_key=settings.llm_api_key)
         gatherer = BusGatherer(bus)
 
         async def publish(event: dict) -> None:
@@ -124,8 +124,7 @@ class ParentAgent:
     async def save(self, item: WatchItem) -> None:
         self.store.save_watch_item(item.model_dump(mode="json"))
         if self.bus:
-            await self.bus.publish(streams.WATCH, {"id": item.id, "status": item.status, "confidence": item.confidence,
-                                                   "title": item.title, "scope": item.scope})
+            await self.bus.publish(streams.WATCH, item.model_dump(mode="json"))     # the whole item: replayable
 
     async def on_signal(self, sig: Signal) -> WatchItem | None:
         age = (datetime.now(UTC) - sig.ts).total_seconds()
@@ -212,6 +211,8 @@ class ParentAgent:
                 self.corr.items[item.id] = item
                 await self.save(item)
             self.store.kv_put(f"request:{msg.get('request_id')}", {"investigation_id": inv_id})
+            if self.bus:
+                await self.bus.publish(streams.INVESTIGATIONS, {"request_id": msg.get("request_id"), "id": inv_id})
         elif kind == "dismiss" and msg.get("watch_item_id"):
             raw = self.store.get_watch_item(msg["watch_item_id"])
             if raw:

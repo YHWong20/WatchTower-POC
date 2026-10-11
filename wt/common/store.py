@@ -223,6 +223,10 @@ class Store:
                           (metric, entity, since))
         return [(r["ts"], r["value"]) for r in rows]
 
+    def samples_since(self, since: float) -> list[tuple[str, str, float, float]]:
+        rows = self._rows("SELECT metric, entity, ts, value FROM samples WHERE ts > ? ORDER BY ts", (since,))
+        return [(r["metric"], r["entity"], r["ts"], r["value"]) for r in rows]
+
     def trim_samples(self, before: float) -> None:
         self._exec("DELETE FROM samples WHERE ts < ?", (before,))
 

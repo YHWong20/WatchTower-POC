@@ -27,7 +27,8 @@ from wt.agents.parent.predicates import PREDICATES
 from wt.common import jobs
 from wt.common.catalog import Escalation, Playbook, Sources, Topology
 from wt.common.contracts import (Alarm, Conclusion, Correlation, Escalation as EscalationOut, EvidenceItem, Hypothesis,
-                                 Investigation, LlmAdjustment, Observation, RecommendedAction, Reuse, Trigger, utcnow)
+                                 Investigation, LlmAdjustment, Observation, RecommendedAction, Reuse, Trigger, dump,
+                                 utcnow)
 from wt.common.llm import LLMClient
 from wt.common.store import Store
 
@@ -122,14 +123,18 @@ class Investigator:
             self.store.kv_put("inv_counter", n)
             return f"INV-{n:04d}"
 
-    async def progress(self, inv_id: str, text: str, status: str = "running", **extra: Any) -> None:
+    async def progress(self, inv_id: str, text: str, status: str = "running", publish_only: dict | None = None,
+                       **extra: Any) -> None:
+        """Record a progress step (kv, for the Copilot) and publish it on wt.investigations.
+        publish_only: fields that go on the bus but not into the progress record (evidence items,
+        the final document), so a recording holds everything the Copilot showed."""
         p = self.store.kv_get(f"progress:{inv_id}", {"status": "running", "steps": []})
         p["status"] = status
         p["steps"].append({"t": datetime.fromtimestamp(self.clock(), UTC).strftime("%H:%M:%S"), "text": text})
         p.update(extra)
         self.store.kv_put(f"progress:{inv_id}", p)
         if self.publish:
-            await self.publish({"id": inv_id, "status": status, "text": text, **extra})
+            await self.publish({"id": inv_id, "status": status, "text": text, **extra, **(publish_only or {})})
 
     # ------------------------------------------------------------ playbook and params
 
@@ -226,7 +231,7 @@ class Investigator:
             tag = {"splunk": "Splunk", "solarwinds": "SolarWinds", "probe_cli": "probe · CLI",
                    "probe_k8s_api": "probe · API"}[res.source]
             await self.progress(run.inv_id, f"{ev_id} from {tag} ({res.agent}): {item.finding}",
-                                evidence=len(run.evidence))
+                                evidence=len(run.evidence), publish_only={"evidence_item": dump(item)})
 
         await self.gatherer.gather(tasks, self.cfg["evidence_timeout_s"], on_result)
 
@@ -328,7 +333,7 @@ class Investigator:
         self.store.kv_put(f"timeline:{inv_id}", self.timeline(run))
         await self.progress(inv_id, f"Done: {hyps[0].statement} ({conclusion.confidence_label}, "
                                     f"{hyps[0].confidence:.2f}); escalate to {escalation.team} {escalation.priority}",
-                            status="done")
+                            status="done", publish_only={"investigation": dump(inv), "timeline": self.timeline(run)})
         return inv
 
     # ------------------------------------------------------------ LLM jobs with rule fallbacks
@@ -481,7 +486,10 @@ class Investigator:
         top_spec = next((h for h in pb.hypotheses if h.id == hyps[0].id), None)
         order = list(top_spec.actions_catalogue) if top_spec and top_spec.actions_catalogue else []
         general = ["node_journal"] if run.params.get("node") and "node_journal" in pb.actions else []
-        catalogue = order + [k for k in general if k not in order] or list(pb.actions)   # what the model may pick
+        catalogue = order + [k for k in general if k not in order]           # what the model may pick
+        rest = [k for k in pb.actions if k not in catalogue]                  # rule fallback tops up from here
+        if len(catalogue) < 3:
+            catalogue += rest[: 3 - len(catalogue)]
         why_rule = {
             "top_talkers": f"Find what fills {run.params.get('port')}'s egress queue",
             "queue_stats": "Confirm the drops sit in one queue class (bursts, not errors)",
@@ -490,6 +498,10 @@ class Investigator:
             "node_journal": "Read the kubelet's own account of the failed renewals",
             "etcd_health": "Rule out etcd latency on the control plane",
             "policy_check": "See whether the egress QoS policy leaves enough buffer for bursts",
+            "error_counters": f"Confirm the CRC errors on {run.params.get('port')} are still rising",
+            "transceiver": "Low or unstable light levels point at the optic or the fibre",
+            "link_log": "See how often the link went down and when it started",
+            "node_top": f"Find the process starving {run.params.get('node')}",
         }
         chosen: list[tuple[str, str]] = [(k, why_rule.get(k, pb.actions[k].step)) for k in order[:4]]
         for k in catalogue:

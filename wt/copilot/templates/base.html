@@ -14,8 +14,14 @@
   <span class="pill p-out" title="WatchTower never changes a switch or the cluster">Read-only</span>
   <span class="sub" id="clock">{{ now }} UTC</span>
 </div>
+{% if replay %}<div class="replaybar">REPLAY · recording <b>{{ replay.name }}</b> ({{ replay.recorded }}) at {{ replay.speed }}× · the lab and the model are not used: everything shown comes from the recording</div>{% endif %}
 {% block body %}{% endblock %}
 <script>
+{% if replay %}
+setInterval(async () => { try { const r = await (await fetch('/api/now')).json();
+  document.getElementById('clock').textContent = new Date(r.now * 1000).toISOString().substring(11, 19) + ' UTC'; } catch (e) {} }, 1000);
+{% else %}
 setInterval(() => { document.getElementById('clock').textContent = new Date().toISOString().substring(11, 19) + ' UTC'; }, 1000);
+{% endif %}
 </script>
 </body></html>
