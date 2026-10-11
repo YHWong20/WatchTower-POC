@@ -1,0 +1,17 @@
+{
+ "name": "llm-off",
+ "profile": "lite",
+ "started": 1791693267.200534,
+ "ended": 1791693517.294177,
+ "events": {
+  "alarms": 25,
+  "agents": 25,
+  "samples": 9,
+  "wt.signals": 5,
+  "wt.watch": 6,
+  "wt.sre": 1,
+  "wt.investigations": 24,
+  "wt.tasks": 17,
+  "wt.evidence": 17
+ }
+}

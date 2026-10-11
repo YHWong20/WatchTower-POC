@@ -120,3 +120,10 @@ def test_no_route_can_change_the_infrastructure():
     posts = sorted(r.path for r in app.routes if "POST" in getattr(r, "methods", set()))
     assert posts == ["/ask", "/investigate", "/watch/{item_id}/dismiss", "/watch/{item_id}/explain"]
     assert not [r for r in app.routes if getattr(r, "methods", set()) & {"PUT", "PATCH", "DELETE"}]
+
+
+async def test_a_closed_cross_domain_item_shows_as_closed(ui, store):
+    http, _, item, _ = ui
+    store.save_watch_item(item.model_copy(update={"status": "closed"}).model_dump(mode="json"))
+    watch = (await http.get("/partials/watch")).text
+    assert "CLOSED" in watch and "EMERGING" not in watch

@@ -1,0 +1,18 @@
+name: node-cpu-starvation
+description: 'VARIANT of lite-worker1-flap: SystemOOM and memory pressure events,
+  CPU 95% in SolarWinds, no port drops.'
+profile: lite
+variant_of: lite-worker1-flap
+request:
+  mode: incident_investigation
+  node: worker-1
+  requested_by: eval
+  alarm:
+    tool: splunk
+    name: NodeNotReady
+    entity: ocp-sim-worker
+expect:
+  top_key: node_resource_starvation
+  band: high
+  min_confidence: 0.7
+  team: Platform team

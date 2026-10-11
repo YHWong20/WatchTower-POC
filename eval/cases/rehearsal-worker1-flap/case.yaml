@@ -1,0 +1,22 @@
+name: rehearsal-worker1-flap
+description: 'Recorded in the make demo rehearsal (2026-10-11 03:28-03:41 UTC, lite).
+  master-1 also logged 3 incidental timeouts (worker-1: 386): H5 ''all nodes affected''
+  must not tie H1.'
+profile: lite
+request:
+  mode: incident_investigation
+  node: worker-1
+  alarm:
+    tool: splunk
+    name: NodeNotReady
+    entity: ocp-sim-worker
+  requested_by: eval
+expect:
+  top_key: network_path_congestion
+  min_confidence: 0.7
+  team: Network team
+  priority: P3
+  no_reboot: true
+  no_eviction: true
+  min_reuse: 0.85
+  max_probes: 1

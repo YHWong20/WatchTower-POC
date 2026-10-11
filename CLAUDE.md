@@ -43,7 +43,9 @@ Scope: Cisco + OpenShift only. See MASTER_PROMPT.md.
 - Rebuilding the image restarts every service that uses it (sims too, which drops the switch's
   in-memory fault). To update only the agents: `docker compose build wt-agents && docker compose
   up -d --no-deps wt-agents`.
-- `make demo`, `make record NAME=…`, `make replay NAME=…`, `make eval`, `make test`
+- `make demo [MODE=investigate] [NAME=…]` (narrated, checked, recorded), `make record NAME=…`,
+  `make stop && make replay NAME=… [SPEED=10]` (no lab, no model), `make eval [MODEL=…] [BASE_URL=…]`,
+  `make offline-check [CMD=…]`, `make test`
 
 ## Mac notes (MacBook Air M2)
 - Ollama runs natively; containers use `http://host.docker.internal:11434/v1`.

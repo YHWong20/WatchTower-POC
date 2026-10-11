@@ -67,6 +67,7 @@ class Settings:
     ssh_user: str
     ssh_password: str
     kubeconfig: str | None
+    llm_api_key: str | None = None
 
 
 def _env(name: str, default: str) -> str:
@@ -101,6 +102,7 @@ def load_settings() -> Settings:
         ssh_user=_env("WT_SSH_USER", "watchtower"),
         ssh_password=_env("WT_SSH_PASSWORD", "watchtower"),
         kubeconfig=os.environ.get("WT_KUBECONFIG"),
+        llm_api_key=os.environ.get("WT_LLM_API_KEY") or None,
     )
 
 

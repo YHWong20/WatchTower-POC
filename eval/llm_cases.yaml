@@ -1,0 +1,103 @@
+# Built by eval/make_llm_cases.py from a recorded rehearsal. Jobs 1, 3 and 6 for make eval.
+source: demo/recordings/rehearsal (INV-0007, WI-0005)
+summarise_watch:
+- input: 'Watch item: cross-domain, node worker-1, confidence 0.9.
+
+    Signals:
+
+    - Output drops on cisco-sim-1 Gi1/0/13 rising 9 polls in a row (3,067 in the last poll); utilisation average 46%; feeds worker-1
+
+    - 88 × i/o timeout on calls from worker-1 to the kubernetes Service in 5m: 88 of 284 failed (baseline 0.32)
+
+    - kubelet on worker-1: 2 × failed to update lease / node status in 5m
+
+    - worker-1 NotReady at 03:39:13 UTC (node-controller: Node ocp-sim-worker status is now: NodeNotReady)
+
+    Link: Topology: Gi1/0/13 on cisco-sim-1 feeds worker-1. The OpenShift and network signals started within 1 min of each other.'
+  must_mention:
+  - worker-1
+  - Gi1/0/13
+interpret:
+- expectation: calls to the local API server endpoint also time out
+  verdict: neutral
+  evidence: 386 of 1788 calls from worker-1 to the kubernetes Service timed out in 20 min; in those minutes 66% still succeeded (partial failure)
+    (worker-1 has no API server of its own)
+- expectation: drops concentrated in one egress queue
+  verdict: supports
+  evidence: "Egress drops on Gi1/0/13: 100% in queue 1 (101,309,304 bytes of 101,309,304): bursty traffic in one class\n  (Bytes)     (Bytes)\
+    \     (Bytes)\n----- ----------- ----------- ----------- ----------- ----------- -----------\n    0           0           0           0  \
+    \         0           0           0\n    1           0           0   101309304           0           0           0\n    2           0    \
+    \       0           0           0           0           0\n\n AQM Broadcast Early WTD COUNTERS(In terms of Bytes)\n--------------------------------------------------\n\
+    \  PORT TYPE          ENQUEUE             DROP\n--------------------------------------------------\n  UPLINK PORT-0                 N/A  \
+    \             0\n"
+- expectation: the node rebooted or the kubelet restarted
+  verdict: refutes
+  evidence: 'No Rebooted or Starting events for worker-1 and no kubelet start in its journal: no reboot, no kubelet restart'
+- expectation: '''slow fdatasync'' count > 0 on the node''s etcd'
+  verdict: refutes
+  evidence: 'No etcd slowness warnings on master-1 in 30 min: 0 × slow fdatasync, 0 × apply request took too long'
+answer:
+- question: Did worker-1 reboot?
+  cite_any:
+  - ev-3
+  context: &id001
+  - - ev-1
+    - 'solarwinds: OutDiscards on Gi1/0/13 > 0 in 11 consecutive polls (total 68,886), still rising in the latest polls; InErrors and OutErrors
+      flat'
+  - - ev-2
+    - 'splunk: worker-1 NotReady 03:39:13, Ready 03:39:48 UTC: NotReady for 35 s (marked after 40 s without a lease renewal), below the 300 s
+      eviction threshold'
+  - - ev-3
+    - 'splunk: No Rebooted or Starting events for worker-1 and no kubelet start in its journal: no reboot, no kubelet restart'
+  - - ev-4
+    - 'splunk: No Killing/Started events for the API server or etcd pods on worker-1: they did not restart (4 probe-failure events for other pods,
+      not restarts)'
+  - - ev-5
+    - 'probe_cli: Egress drops on Gi1/0/13: 100% in queue 1 (101,309,304 bytes of 101,309,304): bursty traffic in one class'
+  - - ev-6
+    - 'splunk: No pods evicted (3 pending deletions cancelled when the node came back)'
+  - - ev-7
+    - 'splunk: 386 of 1788 calls from worker-1 to the kubernetes Service timed out in 20 min; in those minutes 66% still succeeded (partial failure)'
+  - - ev-8
+    - 'splunk: kubelet on worker-1: 6 × failed to update lease / node status'
+  - - ev-9
+    - 'splunk: 0 OVN error lines on worker-1'
+  - - ev-10
+    - 'splunk: No etcd slowness warnings on worker-1 (no etcd member on this node)'
+  - - ev-11
+    - 'splunk: No memory, disk, PID pressure or SystemOOM events for worker-1'
+  - - ev-12
+    - 'solarwinds: worker-1 is not a SolarWinds node, so CPU and memory are not known from SolarWinds'
+  - - ev-13
+    - 'splunk: Timeouts from master-1 (3), worker-1 (386)'
+  - - cor-1
+    - Gi1/0/13 on cisco-sim-1 feeds worker-1 (topology.yaml). Output drops started 1 min after the first Service timeout.
+  - - cor-2
+    - worker-1 has no API server of its own, so every call to the kubernetes Service leaves the node through Gi1/0/13; calls failed only while
+      the port was congested.
+  - - cor-3
+    - The kubelet logged 6 lease update failures from 03:13:00; the node was marked NotReady at 03:39:13 after 40 s without a renewal.
+- question: How long was worker-1 NotReady?
+  cite_any:
+  - ev-2
+  context: *id001
+- question: Were any pods evicted?
+  cite_any:
+  - ev-6
+  context: *id001
+- question: Why did only some calls to the API fail?
+  cite_any:
+  - cor-2
+  - ev-7
+  context: *id001
+- question: Are packets being dropped on the switch port?
+  cite_any:
+  - ev-1
+  - ev-5
+  context: *id001
+- question: What is the BGP state on the core router?
+  refuse: true
+  context: *id001
+- question: Which change ticket caused this?
+  refuse: true
+  context: *id001

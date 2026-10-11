@@ -98,14 +98,38 @@ def node_healthy(f: Facts) -> bool | None:
     return p["count"] == 0 and cpu_ok
 
 
+# "All nodes affected" and "only this node" are judged on proportions, not on "any timeout at all":
+# a few incidental timeouts on another node (the lite lab has a single master) must not make an
+# API-server problem look as likely as the one congested path.
+SHARE_ONLY_NODE = 0.8        # this node has at least 80 % of all timeouts
+SHARE_EVERY_NODE = 0.2       # every node has at least 20 % of the worst node's count ...
+MIN_PER_NODE = 5             # ... and at least 5
+
+
+def _by_node(c: dict[str, Any]) -> tuple[dict[str, int], int, str | None]:
+    by = {k: int(v) for k, v in (c.get("by_node") or {}).items()}
+    node = c.get("node") or (max(by, key=by.get) if by else None)
+    return by, sum(by.values()), node
+
+
 def all_nodes_timeouts(f: Facts) -> bool | None:
     c = _get(f, "api_svc_timeouts_by_node")
-    return None if c is None else bool(c["all_masters"])
+    if c is None:
+        return None
+    by, total, _ = _by_node(c)
+    nodes = c.get("nodes") or (sorted(by) if c.get("all_masters") else [])
+    if not total or len(nodes) < 2:
+        return False
+    peak = max(by.values())
+    return all(by.get(n, 0) >= max(MIN_PER_NODE, SHARE_EVERY_NODE * peak) for n in nodes)
 
 
 def one_node_only(f: Facts) -> bool | None:
     c = _get(f, "api_svc_timeouts_by_node")
-    return None if c is None else bool(c["only_node"])
+    if c is None:
+        return None
+    by, total, node = _by_node(c)
+    return bool(total) and node in by and by[node] >= SHARE_ONLY_NODE * total
 
 
 def util_normal(f: Facts) -> bool | None:

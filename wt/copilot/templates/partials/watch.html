@@ -1,9 +1,9 @@
 {% for i in items %}
 <div class="item {{ i.status }}" {% if i.status == 'closed' %}style="opacity:.6"{% endif %}>
   <div style="display:flex;gap:10px;align-items:center">
-    {% if i.status == 'investigating' %}<span class="pill p-red">INVESTIGATING</span>
+    {% if i.status == 'closed' %}<span class="pill p-grey">CLOSED</span>
+    {% elif i.status == 'investigating' %}<span class="pill p-red">INVESTIGATING</span>
     {% elif i.scope == 'cross_domain' %}<span class="pill p-amb">EMERGING · cross-domain</span>
-    {% elif i.status == 'closed' %}<span class="pill p-grey">CLOSED</span>
     {% else %}<span class="pill p-grey">WATCHING · single domain</span>{% endif %}
     <span class="muted small">{{ i.id }} · updated {{ i.updated_at|hhmm }} UTC · {{ '%.0f'|format(i.reuse.rate * 100) }}% reused, {{ i.reuse.probed }} probes</span>
     <span class="sp"></span><span class="small"><b>Confidence: {{ i.confidence_label }} ({{ '%.2f'|format(i.confidence) }})</b></span>

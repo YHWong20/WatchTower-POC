@@ -49,6 +49,7 @@ hypotheses:
       - {ev: ovn_errors,       ask: openshift, signal: ovn_errors, predicate: "count > 10", weight: 2}
     refute:
       - {ev: api_timeouts_partial, ask: openshift, signal: api_svc_calls, predicate: "only calls that leave the node fail (partial failure)", weight: 2}
+    actions_catalogue: [node_journal, check_peer_ports, lease_watch]
     escalate_to: platform
 
   - id: H3
@@ -58,6 +59,7 @@ hypotheses:
       - {ev: etcd_fsync, ask: openshift, signal: etcd_latency, predicate: "'slow fdatasync' count > 0", weight: 2}
     refute:
       - {ev: etcd_peer_only, ask: openshift, signal: etcd_latency, predicate: "only peer/round-trip warnings, no fsync warnings", weight: 1}
+    actions_catalogue: [etcd_health, node_journal, lease_watch]
     escalate_to: platform
 
   - id: H4
@@ -68,6 +70,7 @@ hypotheses:
       - {ev: node_cpu_high, ask: openshift, signal: node_cpu_memory, predicate: "CPU > 90% (if the node is in SolarWinds)", weight: 1}
     refute:
       - {ev: node_healthy, ask: openshift, signal: node_pressure, predicate: "no pressure events, and CPU < 60% where SolarWinds has it", weight: 2}
+    actions_catalogue: [node_top, node_journal, lease_watch]
     escalate_to: platform
 
   - id: H5
@@ -75,9 +78,10 @@ hypotheses:
     optional: true
     statement: API servers overloaded (all nodes affected, not one)
     expect:
-      - {ev: all_nodes_timeouts, ask: openshift, signal: api_svc_timeouts_by_node, predicate: "timeouts from every master", weight: 2}
+      - {ev: all_nodes_timeouts, ask: openshift, signal: api_svc_timeouts_by_node, predicate: "timeouts from every node, each a real share (>= 5 and >= 20% of the worst)", weight: 2}
     refute:
-      - {ev: one_node_only, ask: openshift, signal: api_svc_timeouts_by_node, predicate: "only {node} sees timeouts", weight: 2}
+      - {ev: one_node_only, ask: openshift, signal: api_svc_timeouts_by_node, predicate: "{node} has at least 80% of all timeouts", weight: 2}
+    actions_catalogue: [etcd_health, node_journal, check_peer_ports]
     escalate_to: platform
 
 confidence:
@@ -92,6 +96,7 @@ actions:                     # read-only diagnostic steps the LLM may choose fro
   check_peer_ports: {step: "Compare drops on the other masters' ports", command: "show interfaces {peer_ports} | include drops"}
   node_journal: {step: "Read the kubelet journal around the flap", command: "oc adm node-logs {node} -u kubelet --since=-30m"}
   etcd_health:  {step: "Check etcd member health and latency", command: "oc -n openshift-etcd rsh <etcd-pod> etcdctl endpoint status -w table"}
+  node_top:     {step: "See what uses CPU and memory on {node}", command: "oc adm top pods -A --sort-by=memory | head -20"}
 
 explain_template: |
   Likely cause: {top.statement} ({confidence_label}, {confidence}).

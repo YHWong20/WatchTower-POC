@@ -1,0 +1,16 @@
+name: crc-link-fault
+description: 'VARIANT of lite-worker1-flap: CRC errors and link flaps on Gi1/0/13,
+  almost no drops, normal utilisation.'
+profile: lite
+variant_of: lite-worker1-flap
+request:
+  mode: incident_investigation
+  switch: cisco-sim-1
+  port: Gi1/0/13
+  playbook: network-port-congestion
+  requested_by: eval
+expect:
+  top_key: link_fault
+  band: high
+  min_confidence: 0.7
+  team: Network team

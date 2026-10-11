@@ -21,6 +21,7 @@ from wt.common.contracts import dump
 from wt.common.llm import LLMClient
 
 CASES = sorted((REPO_ROOT / "eval" / "cases").glob("*/case.yaml"))
+LITE = REPO_ROOT / "eval" / "cases" / "lite-worker1-flap" / "case.yaml"
 SCHEMA = json.loads((REPO_ROOT / "contracts" / "investigation.schema.json").read_text())
 
 
@@ -33,14 +34,18 @@ def fake_llm(store, delta: float = -0.1) -> LLMClient:
                     "what_happened": "The node had a transient NotReady (node flap) and recovered without a reboot; "
                                      "no control-plane pods restarted and no pods were evicted.",
                     "adjustment": {"delta": delta, "reason": "test adjustment"}},
-        "next_steps": {"steps": [{"key": "queue_stats", "why": "a"}, {"key": "top_talkers", "why": "b"},
-                                 {"key": "lease_watch", "why": "c"}], "note_summary": "Port congestion caused a flap."},
+        "next_steps": None,                          # filled per request from the catalogue it offers
         "interpret": {"verdict": "neutral", "reason": "n/a"},
     }
 
     def handler(request: httpx.Request) -> httpx.Response:
-        job = json.loads(request.content)["response_format"]["json_schema"]["name"]
-        return httpx.Response(200, json={"choices": [{"message": {"content": json.dumps(answers[job])}}]})
+        body = json.loads(request.content)
+        job = body["response_format"]["json_schema"]["name"]
+        answer = answers[job]
+        if job == "next_steps":                  # pick the first three keys the prompt offers
+            offered = body["messages"][-1]["content"].split("Catalogue: ", 1)[1].split(".", 1)[0].split(", ")
+            answer = {"steps": [{"key": k, "why": "test"} for k in offered[:3]], "note_summary": "test note"}
+        return httpx.Response(200, json={"choices": [{"message": {"content": json.dumps(answer)}}]})
 
     return LLMClient("http://llm/v1", "fake", Audit(store), store, transport=httpx.MockTransport(handler))
 
@@ -68,15 +73,18 @@ async def test_case(case_path, llm_on, store):
     pb = load_playbooks()[inv.playbook]
     top_key = next(h.key for h in pb.hypotheses if h.id == top.id)
     assert top_key == exp["top_key"] and top.confidence >= exp["min_confidence"], [(h.id, h.confidence) for h in inv.hypotheses]
-    assert inv.conclusion.confidence_label == "high"
+    assert inv.conclusion.confidence_label == exp.get("band", "high")
     assert inv.llm_used is llm_on
     text = f"{inv.conclusion.likely_cause} {inv.conclusion.what_happened}".lower()
     if exp.get("no_reboot"):
         assert "without a reboot" in text or "did not reboot" in text
     if exp.get("no_eviction"):
         assert "not evicted" in text or "no pods were evicted" in text
-    assert (inv.escalation.team, inv.escalation.priority) == (exp["team"], exp["priority"])
-    assert inv.reuse.rate >= exp["min_reuse"] and inv.reuse.probed <= exp["max_probes"]
+    assert inv.escalation.team == exp["team"]
+    if "priority" in exp:
+        assert inv.escalation.priority == exp["priority"]
+    if "min_reuse" in exp:
+        assert inv.reuse.rate >= exp["min_reuse"] and inv.reuse.probed <= exp["max_probes"]
     assert len(inv.recommended_actions) >= 3 and all(a.kind == "diagnostic" for a in inv.recommended_actions)
     # every statement links to evidence: the conclusion cites at least two items from two sources
     ev = {e.id: e for e in inv.evidence}
@@ -90,7 +98,7 @@ async def test_case(case_path, llm_on, store):
 
 
 async def test_inconclusive_when_evidence_is_missing(store):
-    case = load_case(CASES[0])
+    case = load_case(LITE)
     inv_ = investigator(case, store)
     inv_.gatherer = FixtureGatherer([])          # the agents answered nothing
     inv = await inv_.investigate(Request(**case["request"]))

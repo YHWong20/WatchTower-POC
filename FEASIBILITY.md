@@ -1,7 +1,25 @@
 # PoC feasibility on a MacBook Air M2
 
-YH's Mac is an **8 GB** M2 Air, with OrbStack. Figures are estimates; check them in phase 2.
-Nothing here has been run on an M2 yet; figures are estimates to check in phase 2.
+YH's Mac is an **8 GB** M2 Air, with OrbStack. The lite profile has now been built and run on it
+(phases 1 to 8, October 2026); the measured figures are in the next section, the rest are the
+original estimates.
+
+## Measured on the lite lab (8 GB M2 Air, 2026-10-11)
+
+| Container | Memory in use | Limit |
+|---|---|---|
+| kind `ocp-sim-control-plane` (API server, etcd, controllers) | 0.73 to 0.83 GB | none (kind node) |
+| kind `ocp-sim-worker` (svc-prober, demo app, metrics-server) | 0.26 to 0.31 GB | none (kind node) |
+| `wt-agents` (Network, OpenShift, Parent agents + Copilot) | 75 to 110 MB | 384 MB |
+| `wt-sims` (cisco-sim-1, splunk-sim, solarwinds-sim, forwarder) | 60 to 70 MB | 256 MB |
+| `redis` | 5 to 8 MB | 64 MB |
+| **Docker total (`make health`)** | **1.2 to 1.5 GB** | budget 2.5 GB |
+| gemma3:1b in Ollama (outside Docker) | about 0.8 GB loaded | |
+
+Every compose service has a `mem_limit`; the kind nodes are bounded by the OrbStack VM. The
+whole demo (proactive watch, the flap, the investigation with gemma3:1b) passed `make
+verify-copilot` with Safari and a terminal open. `make eval` with gemma3:4b runs with the
+compose stack stopped (`make stop`), so the model has room.
 
 ## Verdict
 
@@ -96,6 +114,11 @@ The on-prem Gemma (~40B) may not be fully competent at agentic tasks. The design
   a fixed catalogue, and may move confidence by at most ±0.10.
 - `make eval` scores any OpenAI-compatible model on those jobs. Run it on gemma3:4b in the PoC
   and on the on-prem Gemma in the pilot to measure competence instead of guessing.
+- Measured (eval/results, 2026-10-11): gemma3:4b 100% valid JSON, 86% citation accuracy, p50
+  17 s; gemma3:1b 100% valid JSON, 57% citation accuracy, p50 4.6 s. Both rank all 7 cases
+  correctly because the rules do; the rules alone also get 7 of 7.
+- gemma3:4b on the 8 GB Mac: only with the lab stopped. With the OrbStack VM running, macOS
+  swapped 10 GB and single calls took minutes; with the kind nodes stopped, 6 to 30 s.
 
 ## Known limits
 - kind is upstream Kubernetes, not OpenShift: no ClusterOperators, OVN-Kubernetes, Routes or

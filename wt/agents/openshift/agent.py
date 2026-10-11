@@ -317,7 +317,8 @@ class OpenShiftAgent(DomainAgent):
         res = await self.splunk("api_svc_timeouts_by_node", window=window)
         by_host = {self.display(r["host"]): int(r["count"]) for r in res.rows}
         masters = [n for n, spec in self.ctx.topology.nodes().items() if spec.role == "master"]
-        facts = {"by_node": by_host, "nodes_with_timeouts": sorted(by_host),
+        facts = {"by_node": by_host, "nodes_with_timeouts": sorted(by_host), "node": node,
+                 "nodes": sorted(self.ctx.topology.nodes()), "masters": masters,
                  "all_masters": bool(masters) and all(by_host.get(m, 0) > 0 for m in masters),
                  "only_node": set(by_host) <= {node} and node in by_host}
         finding = ("Timeouts only from " + node if facts["only_node"] else

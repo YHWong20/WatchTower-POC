@@ -52,6 +52,7 @@ class LLMClient:
         max_tokens: int = 512,
         actor: str = "watchtower",
         transport: httpx.AsyncBaseTransport | None = None,
+        api_key: str | None = None,
     ):
         self.model = model
         self.audit = audit
@@ -59,7 +60,9 @@ class LLMClient:
         self.enabled = enabled
         self.max_tokens = max_tokens
         self.actor = actor
-        self.http = httpx.AsyncClient(base_url=base_url.rstrip("/"), timeout=timeout_s, transport=transport)
+        headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}   # on-prem gateways usually want one
+        self.http = httpx.AsyncClient(base_url=base_url.rstrip("/"), timeout=timeout_s, transport=transport,
+                                      headers=headers)
 
     async def close(self) -> None:
         await self.http.aclose()

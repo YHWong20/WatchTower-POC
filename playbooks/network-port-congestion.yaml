@@ -34,7 +34,7 @@ hypotheses:
       - {ev: link_flaps, ask: network, signal: switch_syslog, predicate: "%LINK-3-UPDOWN for the port", weight: 2}
     refute:
       - {ev: no_crc, ask: network, signal: interface_discards, predicate: "errors flat", weight: 2}
-    actions_catalogue: [queue_stats, top_talkers]
+    actions_catalogue: [error_counters, transceiver, link_log]
     escalate_to: network
   - id: H3
     key: sustained_overload
@@ -57,3 +57,6 @@ actions:
   queue_stats: {step: "Per-queue drops", command: "show platform hardware fed switch active qos queue stats interface {port}"}
   top_talkers: {step: "Top talkers on the port (NetFlow or SPAN by the network team)"}
   policy_check: {step: "Review the egress QoS policy on the port", command: "show policy-map interface {port} output"}
+  error_counters: {step: "Confirm CRC and input errors are still rising", command: "show interfaces {port} counters errors"}
+  transceiver: {step: "Check the optic's light levels", command: "show interfaces {port} transceiver detail"}
+  link_log: {step: "Read the switch log for the port's link changes", command: "show logging | include {port}"}
