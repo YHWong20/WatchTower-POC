@@ -29,6 +29,7 @@ LIMIT_S = 300
 
 
 async def main() -> int:
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))   # stopped from outside: still clear the fault
     ap = argparse.ArgumentParser()
     ap.add_argument("--keep-fault", action="store_true", help="let the fault run to the end")
     args = ap.parse_args()

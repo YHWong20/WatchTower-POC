@@ -24,6 +24,7 @@ import json
 import os
 import re
 import subprocess
+import signal
 import sys
 import threading
 import time
@@ -65,6 +66,7 @@ def hhmmss(t: float) -> str:
 
 
 def main() -> int:
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))   # stopped from outside: still clear the fault
     profile = os.environ.get("WT_PROFILE", "lite")
     ap = argparse.ArgumentParser()
     ap.add_argument("node", nargs="?", default="ocp-sim-worker" if profile == "lite" else "ocp-sim-control-plane2")

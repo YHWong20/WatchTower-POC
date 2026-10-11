@@ -64,6 +64,7 @@ def ready(node: str) -> str:
 
 
 def main() -> int:
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))   # stopped from outside: still clear the fault
     ap = argparse.ArgumentParser()
     ap.add_argument("--no-screenshots", action="store_true")
     args = ap.parse_args()

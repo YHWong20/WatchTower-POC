@@ -49,9 +49,10 @@ clear_all() {
 }
 trap clear_all EXIT
 trap 'exit 130' INT TERM          # stop for good (the EXIT trap clears); never carry on to the next phase
+pause() { sleep "$1" & wait $!; } # bash runs a trap only between commands: wait, unlike sleep, is interruptible
 
 echo "$(date +%T) fault on $NODE, cisco-sim-1 $PORT"
-mark A; echo "$(date +%T) phase A: creeping congestion (${A}s)";    netem delay 80ms 60ms loss 3%;    switch low;    sleep "$A"
-mark B; echo "$(date +%T) phase B: getting worse (${B}s)";          netem delay 250ms 150ms loss 12%; switch medium; sleep "$B"
-mark C; echo "$(date +%T) phase C: burst, expect NotReady (${C}s)"; netem loss 90%;                   switch high;   sleep "$C"
-mark D; echo "$(date +%T) phase D: partial recovery (${D}s)";       netem delay 250ms 150ms loss 12%; switch medium; sleep "$D"
+mark A; echo "$(date +%T) phase A: creeping congestion (${A}s)";    netem delay 80ms 60ms loss 3%;    switch low;    pause "$A"
+mark B; echo "$(date +%T) phase B: getting worse (${B}s)";          netem delay 250ms 150ms loss 12%; switch medium; pause "$B"
+mark C; echo "$(date +%T) phase C: burst, expect NotReady (${C}s)"; netem loss 90%;                   switch high;   pause "$C"
+mark D; echo "$(date +%T) phase D: partial recovery (${D}s)";       netem delay 250ms 150ms loss 12%; switch medium; pause "$D"
