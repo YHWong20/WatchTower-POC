@@ -54,6 +54,11 @@ after the flap, Investigate on the Splunk alert gives the report within 3 minute
 cause, "no reboot", at least three read-only next steps, Network team P3, at least 85% reuse and
 at most one probe.
 
+Before presenting, `make demo-reset` empties the Copilot and deletes splunk-sim's old fired
+alerts (or `make demo RESET=1`). Stage-by-stage screenshots of a full run are in
+[`docs/demo/`](docs/demo/README.md): baseline, first signal, cross-domain item, explanation, the
+live investigation, the NotReady alarm, the report, Ask and the escalation note.
+
 **Replay** (no lab, no model): `make stop && make replay NAME=rehearsal [SPEED=10]` replays a
 recording into a fresh Redis and serves the same Copilot screens at http://localhost:8080 on the
 recording's clock. `SPEED=0` jumps to the end. `make replay-list` lists recordings.

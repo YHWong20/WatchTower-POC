@@ -64,7 +64,7 @@
    <div class="muted small" style="margin-top:4px">The note includes the timeline, the Splunk and SolarWinds queries with counts, and the probe output.</div></div>
   <div class="muted small" style="margin-top:10px">WatchTower stops here. Any change is made by the network or platform team through change control.</div>
   <h3 style="margin-top:16px">Ask about this investigation</h3>
-  <div id="answers"></div>
+  <div id="answers">{% if ask %}<div hx-post="/ask" hx-vals='{{ {"question": ask, "inv_id": inv.id}|tojson }}' hx-trigger="load" hx-swap="outerHTML"></div>{% endif %}</div>
   <form class="ask" hx-post="/ask" hx-target="#answers" hx-swap="beforeend" hx-on::after-request="this.reset()">
    <input type="hidden" name="inv_id" value="{{ inv.id }}"><input id="askq" name="question" placeholder="e.g. did it reboot? why only some calls?" autocomplete="off" required>
    <div class="muted small htmx-indicator" style="margin-top:4px">thinking…</div>

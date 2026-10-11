@@ -7,7 +7,7 @@
   <h3 style="margin-top:18px">Domain agents</h3>
   <div id="agents" hx-get="/partials/agents" hx-trigger="load, every 10s"></div>
   <h3 style="margin-top:18px">Ask WatchTower</h3>
-  <div id="answers"></div>
+  <div id="answers">{% if ask %}<div hx-post="/ask" hx-vals='{{ {"question": ask}|tojson }}' hx-trigger="load" hx-swap="outerHTML"></div>{% endif %}</div>
   <form class="ask" hx-post="/ask" hx-target="#answers" hx-swap="beforeend" hx-on::after-request="this.reset()">
     <input name="question" placeholder="Ask, or say &quot;investigate …&quot;" autocomplete="off" required>
     <div class="muted small htmx-indicator" style="margin-top:4px">thinking…</div>
@@ -16,7 +16,7 @@
  <div class="card">
   <h3>Watch items · weak signals WatchTower is tracking</h3>
   <div id="watch" hx-get="/partials/watch" hx-trigger="load, every 10s"><div class="muted small">Loading…</div></div>
-  <div id="explained"></div>
+  <div id="explained">{% if explain %}<div hx-post="/watch/{{ explain|urlencode }}/explain" hx-trigger="load" hx-swap="outerHTML"></div>{% endif %}</div>
   <div class="card" style="margin-top:12px"><h3>Signals over the last hour</h3>
    <div style="height:170px"><canvas id="timeline"></canvas></div>
    <div class="muted small" id="timeline-empty" style="display:none">No signals yet: every series is flat.</div>

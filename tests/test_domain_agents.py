@@ -253,3 +253,12 @@ async def test_recorded_phase_a_raises_both_signals_from_reuse_only():
     assert "ocp.api_svc_timeouts worker-1" in seen and "net.output_drops_rising cisco-sim-1:Gi1/0/13" in seen
     for key in ("ocp.api_svc_timeouts worker-1", "net.output_drops_rising cisco-sim-1:Gi1/0/13"):
         assert 0 < seen[key] - FAULT_START <= 300, (key, seen[key] - FAULT_START)
+
+
+async def test_a_node_still_notready_is_reported_as_such_not_its_earlier_flap():
+    rows = [{"_time": splunk_time(NOW - 900), "reason": "NodeNotReady", "message": "x"},
+            {"_time": splunk_time(NOW - 850), "reason": "NodeReady", "message": "y"},
+            {"_time": splunk_time(NOW - 20), "reason": "NodeNotReady", "message": "z"}]
+    recs = [record(SOURCES, "node_ready_events", rows, node="ocp-sim-worker", window="30m")]
+    res = await OpenShiftAgent(context(recs, NOW)).handle(task("node_ready_events", node="ocp-sim-worker", window="30m"))
+    assert res.facts["still_not_ready"] and "NotReady since" in res.finding and "1 earlier flap" in res.finding

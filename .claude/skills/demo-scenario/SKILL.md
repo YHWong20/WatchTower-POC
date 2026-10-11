@@ -33,6 +33,9 @@ Short version for a tight slot: `make fault NODE=ocp-sim-control-plane2 MODE=inv
 (flap at about 3 minutes), show Mode 2 only.
 
 ## What the commands do
+- `make demo-reset`: empty Copilot (watch items, investigations, signals) and no splunk-sim fired
+  alerts; keeps baselines. `make demo RESET=1` runs it first.
+- `lab/demo_screenshots.py` (run next to `make demo`): a screenshot per stage into docs/demo/.
 - `make demo [MODE=investigate] [NAME=x]`: preflight (`make health`, waits for open watch items
   to close), records to `demo/recordings/<NAME>`, runs the fault through the Copilot with every
   definition-of-done check printed (lab/verify_copilot.py), keeps recording 30 s after the report.

@@ -246,6 +246,15 @@ def create_app(store: EventStore, searches: list[SavedSearch], tokens: set[str],
             for a in store.fired(None if name == "-" else name)]
         return entry_list(f"/services/alerts/fired_alerts/{name}", entries)
 
+    @app.delete("/services/alerts/fired_alerts/{name}")
+    def delete_fired(name: str, who: str = Depends(rest_auth)):
+        """Splunk's own way to delete triggered alerts (an admin action; make demo-reset uses it).
+        Token users (WatchTower) cannot: they are read-only."""
+        if who == "token":
+            raise HTTPException(403, detail="the WatchTower token is read-only")
+        n = store.clear_fired(None if name == "-" else name)
+        return entry_list(f"/services/alerts/fired_alerts/{name}", [{"name": name, "content": {"deleted": n}}])
+
     @app.get("/services/saved/searches")
     def saved(_who: str = Depends(rest_auth)):
         return entry_list("/services/saved/searches", [

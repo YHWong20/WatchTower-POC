@@ -1,0 +1,17 @@
+{
+ "name": "demo-full",
+ "profile": "lite",
+ "started": 1791694206.009335,
+ "ended": 1791694986.07603,
+ "events": {
+  "alarms": 78,
+  "agents": 78,
+  "samples": 27,
+  "wt.signals": 16,
+  "wt.watch": 17,
+  "wt.investigations": 21,
+  "wt.tasks": 15,
+  "wt.evidence": 15,
+  "wt.sre": 1
+ }
+}

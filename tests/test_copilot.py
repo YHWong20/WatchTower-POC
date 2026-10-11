@@ -127,3 +127,11 @@ async def test_a_closed_cross_domain_item_shows_as_closed(ui, store):
     store.save_watch_item(item.model_copy(update={"status": "closed"}).model_dump(mode="json"))
     watch = (await http.get("/partials/watch")).text
     assert "CLOSED" in watch and "EMERGING" not in watch
+
+
+async def test_deep_links_load_an_explanation_or_answer(ui):
+    http, inv, item, _ = ui
+    page = (await http.get("/", params={"explain": item.id, "ask": "did it reboot?"})).text
+    assert f'hx-post="/watch/{item.id}/explain" hx-trigger="load"' in page and "did it reboot?" in page
+    report = (await http.get(f"/investigations/{inv.id}", params={"ask": "why only some calls?"})).text
+    assert 'hx-trigger="load"' in report and "why only some calls?" in report

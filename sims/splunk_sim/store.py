@@ -106,6 +106,12 @@ class EventStore:
                 "INSERT INTO fired_alerts(name, trigger_time, expires, severity, sid, result_count, entity, message) "
                 "VALUES (?,?,?,?,?,?,?,?)", (name, trigger_time, expires, severity, sid, result_count, entity, message))
 
+    def clear_fired(self, name: str | None = None) -> int:
+        with self.lock, self.db:
+            if name:
+                return self.db.execute("DELETE FROM fired_alerts WHERE name = ?", (name,)).rowcount
+            return self.db.execute("DELETE FROM fired_alerts").rowcount
+
     def fired(self, name: str | None = None, now: float | None = None) -> list[dict[str, Any]]:
         now = time.time() if now is None else now
         sql = ("SELECT name, trigger_time, expires, severity, sid, result_count, entity, message "

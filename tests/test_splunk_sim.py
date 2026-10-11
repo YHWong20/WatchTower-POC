@@ -230,3 +230,12 @@ def test_saved_searches_do_not_fire_on_congestion_symptoms(sample):
 def test_saved_search_with_bad_spl_fails_at_load():
     with pytest.raises(spl.SplError):
         SavedSearch(name="x", search="index=ocp | eval y=1")
+
+
+async def test_fired_alerts_can_be_deleted_by_an_admin_only(app, app_store):
+    app_store.fire("NodeNotReady", time.time(), time.time() + 3600, 4, "sid", 1, "ocp-sim-worker", "m")
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://s") as http:
+        token = await http.delete("/services/alerts/fired_alerts/-", headers={"Authorization": "Bearer wt-poc-token"})
+        assert token.status_code == 403 and app_store.fired()
+        admin = await http.delete("/services/alerts/fired_alerts/-", auth=("admin", "demo"))
+        assert admin.status_code == 200 and app_store.fired() == []

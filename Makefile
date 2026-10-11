@@ -7,7 +7,7 @@ NODE ?= ocp-sim-control-plane2
 endif
 COMPOSE = docker compose --profile $(WT_PROFILE)
 
-.PHONY: sync test selfcheck lab-up lab-down up down stop logs health fault clear verify-flap verify-sources verify-watch verify-investigation verify-copilot demo record replay replay-list eval offline-check
+.PHONY: sync test selfcheck lab-up lab-down up down stop logs health fault clear verify-flap verify-sources verify-watch verify-investigation verify-copilot demo demo-reset record replay replay-list eval offline-check
 
 sync:
 	uv sync
@@ -65,8 +65,14 @@ verify-copilot:             ## phase 6 / definition of done, live through the Co
 NAME ?=
 SPEED ?= 10
 PORT ?= 8080
-demo:                       ## the storyline, narrated and recorded: make demo [MODE=investigate] [NAME=x]
-	uv run python lab/demo.py $(if $(filter investigate,$(MODE)),--investigate) $(if $(NAME),--name $(NAME))
+demo:                       ## the storyline, narrated and recorded: make demo [MODE=investigate] [NAME=x] [RESET=1]
+	$(if $(RESET),$(MAKE) demo-reset &&) uv run python lab/demo.py $(if $(filter investigate,$(MODE)),--investigate) $(if $(NAME),--name $(NAME))
+
+demo-reset:                 ## empty Copilot and no stand-in alerts before a demo (keeps baselines and history of queries)
+	$(COMPOSE) stop wt-agents
+	$(COMPOSE) run --rm --no-deps wt-agents python -m wt.reset
+	curl -fsS -u admin:demo -X DELETE http://127.0.0.1:8089/services/alerts/fired_alerts/- >/dev/null && echo "splunk-sim fired alerts deleted"
+	$(COMPOSE) up -d --no-deps wt-agents
 
 record:                     ## record the bus and the stand-ins' alerts until Ctrl-C: make record NAME=x
 	@test -n "$(NAME)" || { echo "usage: make record NAME=x"; exit 1; }

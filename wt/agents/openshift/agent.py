@@ -194,7 +194,11 @@ class OpenShiftAgent(DomainAgent):
                 down = None
         facts: dict[str, Any] = {"flaps": len(flaps) + (1 if down else 0), "still_not_ready": down is not None,
                                  "events": [{"t": hhmmss(t), "reason": r} for t, r in events]}
-        if flaps:
+        if down:                                    # NotReady right now: that is the news, not an earlier flap
+            facts.update(not_ready_at=hhmmss(down), not_ready_ts=down)
+            finding = (f"{node} NotReady since {hhmmss(down)} UTC and not Ready again yet"
+                       + (f" ({len(flaps)} earlier flap(s) in the window)" if flaps else ""))
+        elif flaps:
             nr, rd = flaps[-1]
             gap = round(rd - nr)
             facts.update(not_ready_at=hhmmss(nr), ready_at=hhmmss(rd), not_ready_ts=nr, ready_ts=rd, gap_s=gap,
@@ -203,9 +207,6 @@ class OpenShiftAgent(DomainAgent):
                        f"{GRACE_S} s without a lease renewal), {'below' if gap < EVICTION_S else 'above'} the "
                        f"{EVICTION_S} s eviction threshold"
                        + (f"; {len(flaps)} flaps in the window" if len(flaps) > 1 else ""))
-        elif down:
-            facts.update(not_ready_at=hhmmss(down), not_ready_ts=down)
-            finding = f"{node} NotReady since {hhmmss(down)} UTC and not Ready again yet"
         else:
             finding = f"No NotReady/Ready events for {node} in the last {window}"
         return self.result(task, source="splunk", query=res.query,

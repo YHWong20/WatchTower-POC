@@ -331,8 +331,10 @@ def create_app(settings: Settings, bus: Bus | None, copilot: Copilot | None = No
     # -------------------------------------------------------- proactive watch
 
     @app.get("/", response_class=HTMLResponse)
-    async def watch(request: Request):
-        return tpl.TemplateResponse(request, "watch.html", await common(request, "Proactive watch"))
+    async def watch(request: Request, explain: str = "", ask: str = ""):
+        """?explain=WI-0005 and ?ask=… open the page with that answer loaded (shareable links)."""
+        return tpl.TemplateResponse(request, "watch.html", {**await common(request, "Proactive watch"),
+                                                            "explain": explain, "ask": ask})
 
     @app.get("/partials/alarms", response_class=HTMLResponse)
     async def p_alarms(request: Request):
@@ -373,8 +375,9 @@ def create_app(settings: Settings, bus: Bus | None, copilot: Copilot | None = No
         if it and it.port:
             series.append((f"output drops per poll on {it.port} (SolarWinds)", "out_discards", f"{it.switch}:{it.port}", "#E89B2C"))
         if not series:
-            for name, n in cp.topology.nodes().items():
-                series.append((f"i/o timeouts {name} (Splunk)", "svc_timeouts", name, "#1F4E6B"))
+            palette = ["#1F4E6B", "#0E9F8E", "#E89B2C", "#D9534F", "#7A5BA6"]
+            for i, name in enumerate(cp.topology.nodes()):
+                series.append((f"i/o timeouts {name} (Splunk)", "svc_timeouts", name, palette[i % len(palette)]))
         return {"datasets": [{"label": lbl, "color": color, "axis": "y2" if m == "out_discards" else "y",
                               "points": [{"x": int(t * 1000), "y": v} for t, v in cp.series(m, e)]}
                              for lbl, m, e, color in series]}
@@ -452,9 +455,10 @@ def create_app(settings: Settings, bus: Bus | None, copilot: Copilot | None = No
         return ctx
 
     @app.get("/investigations/{inv_id}", response_class=HTMLResponse)
-    async def investigation(request: Request, inv_id: str):
+    async def investigation(request: Request, inv_id: str, ask: str = ""):
         return tpl.TemplateResponse(request, "investigation.html",
-                                    {**await common(request, f"Investigation {inv_id}"), **inv_context(inv_id)})
+                                    {**await common(request, f"Investigation {inv_id}"), **inv_context(inv_id),
+                                     "ask": ask})
 
     @app.get("/partials/investigation/{inv_id}", response_class=HTMLResponse)
     async def p_investigation(request: Request, inv_id: str):
