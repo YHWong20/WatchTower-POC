@@ -1,3 +1,4 @@
+# Python
 .venv/
 __pycache__/
 *.pyc
@@ -6,3 +7,20 @@ data/
 *.db
 *.db-wal
 *.db-shm
+
+# macOS
+.DS_Store
+._*
+
+# editors and tool caches
+.idea/
+.vscode/
+*.swp
+.ruff_cache/
+.mypy_cache/
+
+# local Claude Code settings (per machine)
+.claude/settings.local.json
+
+# logs
+*.log
