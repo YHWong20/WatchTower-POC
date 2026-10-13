@@ -46,6 +46,12 @@ GROUP = {
     ("node_cpu_memory", "query"): "data", ("interface_discards", "query"): "data",
     ("interface_utilisation", "query"): "data", ("interface_lookup", "query"): "data",
     ("active_alerts", "query_solarwinds"): "absence", ("active_alerts", "query_splunk"): "incident",
+    # added in phase 4: evidence and watch queries
+    ("api_svc_calls", "query"): "data", ("api_svc_timeouts_by_node", "query"): "incident",
+    ("watch_api_svc_calls", "query"): "data", ("watch_lease_failures", "query"): "incident",
+    ("watch_etcd_warnings", "query"): "absence", ("watch_node_events", "query"): "incident",
+    ("watch_link_events", "query"): "data", ("watch_interface_errors", "query"): "data",
+    ("watch_interface_traffic", "query"): "data",
 }
 NOTE = {
     "prod": "OpenShift wording (172.30.0.1); kind's VIP is 10.96.0.1, so it only has to run",

@@ -1,0 +1,17 @@
+{
+ "name": "preflight-1013",
+ "profile": "lite",
+ "started": 1791904691.150784,
+ "ended": 1791905442.0758882,
+ "events": {
+  "alarms": 75,
+  "agents": 75,
+  "samples": 26,
+  "wt.signals": 13,
+  "wt.watch": 14,
+  "wt.investigations": 20,
+  "wt.tasks": 13,
+  "wt.evidence": 15,
+  "wt.sre": 1
+ }
+}
