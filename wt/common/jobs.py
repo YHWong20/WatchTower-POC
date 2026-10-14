@@ -75,7 +75,7 @@ NO_EVIDENCE = "I don't have evidence for that."
 # ---------------------------------------------------------------- 1 summarise a watch item
 
 SUMMARY_SYSTEM = (
-    "You explain a WatchTower watch item to the team lead in 2-3 short sentences. Use only the "
+    "You explain a WatchTower watch item to the SM in 2-3 short sentences. Use only the "
     "signals given. Say what is happening, why the signals are linked, and what could happen next. "
     "No advice to change anything. Reply with JSON only."
 )
