@@ -35,6 +35,7 @@ from wt.common.store import Store
 log = logging.getLogger("wt.parent")
 OnResult = Callable[[Task, EvidenceResult], Awaitable[None]]
 GRACE_S, EVICTION_S = 40, 300
+AGENT_LABEL = {"openshift-agent": "Infra Agent", "network-agent": "Network Agent"}   # as the Copilot shows them
 
 
 class Gatherer(Protocol):
@@ -213,7 +214,7 @@ class Investigator:
                 with open(self.record, "a") as f:
                     f.write(res.model_dump_json() + "\n")
             if not res.ok:
-                await self.progress(run.inv_id, f"{res.agent}: {task.signal} unavailable ({res.error})")
+                await self.progress(run.inv_id, f"{AGENT_LABEL.get(res.agent, res.agent)}: {task.signal} unavailable ({res.error})")
                 return
             existing = run.evidence.get(task.signal)
             ev_id = existing.id if existing else f"ev-{len(run.evidence) + 1}"
@@ -230,7 +231,7 @@ class Investigator:
             self.store.add_evidence(run.inv_id, item)
             tag = {"splunk": "Splunk", "solarwinds": "SolarWinds", "probe_cli": "probe · CLI",
                    "probe_k8s_api": "probe · API"}[res.source]
-            await self.progress(run.inv_id, f"{ev_id} from {tag} ({res.agent}): {item.finding}",
+            await self.progress(run.inv_id, f"{ev_id} from {tag} ({AGENT_LABEL.get(res.agent, res.agent)}): {item.finding}",
                                 evidence=len(run.evidence), publish_only={"evidence_item": dump(item)})
 
         await self.gatherer.gather(tasks, self.cfg["evidence_timeout_s"], on_result)
@@ -300,7 +301,7 @@ class Investigator:
                             opened_at=opened.isoformat(), mode=req.mode)
         tasks = self.tasks_for(run)
         await self.progress(inv_id, f"Tasked the domain agents for {len(tasks)} evidence items "
-                                    f"({sum(1 for t in tasks if t.to == 'openshift')} OpenShift, "
+                                    f"({sum(1 for t in tasks if t.to == 'openshift')} infra, "
                                     f"{sum(1 for t in tasks if t.to == 'network')} network; "
                                     f"{sum(1 for t in tasks if t.needs_live)} live probe)", tasks=len(tasks))
         await self.collect(run, tasks)

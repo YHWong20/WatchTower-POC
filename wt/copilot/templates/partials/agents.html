@@ -1,5 +1,5 @@
 {% for g in agents %}
-<div class="row"><div style="flex:1"><b>{{ {'network-agent':'Network Agent','openshift-agent':'OpenShift Agent','parent-agent':'Parent Agent'}.get(g.agent, g.agent) }}</b>
+<div class="row"><div style="flex:1"><b>{{ {'network-agent':'Network Agent','openshift-agent':'Infra Agent','parent-agent':'Parent Agent'}.get(g.agent, g.agent) }}</b>
   <div class="muted small">
   {% if g.agent == 'parent-agent' %}{{ g.watch_items_open|default(0) }} watch item(s), {{ g.cross_domain_items|default(0) }} cross-domain · {{ g.running|default([])|length }} running
   {% elif g.status == 'down' %}not answering

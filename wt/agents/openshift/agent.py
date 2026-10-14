@@ -62,7 +62,7 @@ class OpenShiftAgent(DomainAgent):
         self._k8s = k8s
 
     def describe(self) -> str:
-        return f"{next(iter(self.ctx.topology.clusters), 'cluster')} · Splunk"
+        return "infra cluster · Splunk"
 
     def display(self, kind_node: str) -> str:
         """ocp-sim-worker -> worker-1 (topology display names); unknown hosts stay as they are."""

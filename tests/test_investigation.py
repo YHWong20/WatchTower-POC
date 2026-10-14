@@ -103,4 +103,4 @@ async def test_inconclusive_when_evidence_is_missing(store):
     inv_.gatherer = FixtureGatherer([])          # the agents answered nothing
     inv = await inv_.investigate(Request(**case["request"]))
     assert inv.hypotheses[0].confidence < 0.4 and inv.conclusion.likely_cause.startswith("Inconclusive")
-    assert inv.escalation.team == "SRE shift lead"
+    assert inv.escalation.team == "Team lead"

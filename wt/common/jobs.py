@@ -75,7 +75,7 @@ NO_EVIDENCE = "I don't have evidence for that."
 # ---------------------------------------------------------------- 1 summarise a watch item
 
 SUMMARY_SYSTEM = (
-    "You explain a WatchTower watch item to an on-shift SRE in 2-3 short sentences. Use only the "
+    "You explain a WatchTower watch item to the team lead in 2-3 short sentences. Use only the "
     "signals given. Say what is happening, why the signals are linked, and what could happen next. "
     "No advice to change anything. Reply with JSON only."
 )
@@ -90,7 +90,7 @@ SUMMARY_EXAMPLES = [
     Example("Watch item: single-domain, interface cisco-sim-2:Gi1/0/1, confidence 0.2.\nSignals:\n- Utilisation on "
             "cisco-sim-2 Gi1/0/1 at 71%, baseline p95 45% for this hour",
             WatchSummary(summary="The uplink Gi1/0/1 on cisco-sim-2 is busier than usual for this hour. Nothing "
-                                 "else is affected and no OpenShift signal is linked, so this is only worth watching.")),
+                                 "else is affected and no infra signal is linked, so this is only worth watching.")),
 ]
 
 
@@ -101,7 +101,7 @@ async def summarise_watch(llm: LLMClient, text: str) -> WatchSummary | None:
 # ---------------------------------------------------------------- 2 extra hypotheses
 
 EXTRA_SYSTEM = (
-    "You help diagnose an OpenShift/Cisco incident. Given the playbook hypotheses and the evidence "
+    "You help diagnose an infrastructure/Cisco incident. Given the playbook hypotheses and the evidence "
     "findings, propose at most two OTHER plausible causes that are not already listed, each with why. "
     "If nothing else is plausible, return an empty list. Reply with JSON only."
 )

@@ -226,7 +226,7 @@ class Copilot:
             metric = METRIC_OF_RULE.get(s.rule)
             pts = self.series(metric, s.entity.name) if metric else []
             tag, cls = TAGS[s.source.tool]
-            out.append({"tag": tag, "cls": cls, "agent": "OpenShift Agent" if s.domain == "openshift" else "Network Agent",
+            out.append({"tag": tag, "cls": cls, "agent": "Infra Agent" if s.domain == "openshift" else "Network Agent",
                         "html": code_spans(s.summary), "spark": sparkline(pts), "rule": s.rule, "id": s.id,
                         "query": s.source.query, "at": hhmm(s.ts)})
         return out

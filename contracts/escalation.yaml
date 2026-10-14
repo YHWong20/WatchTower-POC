@@ -3,7 +3,7 @@
 teams:
   network:  {name: "Network team",  owns: [cisco switching, routing, QoS]}
   platform: {name: "Platform team", owns: [OpenShift control plane, nodes, etcd, SDN/OVN]}
-  sre_lead: {name: "SRE shift lead", owns: [coordination, P1/P2 bridge]}
+  sre_lead: {name: "Team lead", owns: [coordination, P1/P2 bridge]}
 
 priority_rules:            # evaluated top to bottom; first match wins
   - if: "service outage or more than one master NotReady"

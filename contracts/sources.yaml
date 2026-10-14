@@ -35,7 +35,7 @@ signals:
     probe_fallback: {tool: probe_k8s_api, call: "GET /api/v1/nodes/{node} -> status.nodeInfo.bootID", when: "only if the Splunk event stream has a gap covering the window"}
   static_pod_restarts:
     primary: splunk
-    query: 'index=ocp sourcetype=kube:events namespace IN (openshift-kube-apiserver, openshift-etcd, kube-system) source_host={node} reason IN (Killing, Started, BackOff, Unhealthy) earliest=-{window} | stats count by involvedObject.name, reason'
+    query: 'index=ocp sourcetype=kube:events namespace IN (kube-system, *apiserver*, *etcd*) source_host={node} reason IN (Killing, Started, BackOff, Unhealthy) earliest=-{window} | stats count by involvedObject.name, reason'
     reading: No Killing/Started events for the API server or etcd pods on the node = they did not restart. Unhealthy (readiness) events are not restarts; in the lab, metrics-server on the flapping node logs them while it cannot reach the API. A repeated event arrives once per count update.
     probe_fallback: {tool: probe_k8s_api, call: "GET pods on {node} -> restartCount", when: "only if events are missing for the window"}
   pod_evictions:

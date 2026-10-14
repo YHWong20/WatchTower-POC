@@ -92,11 +92,11 @@ confidence:
 actions:                     # read-only diagnostic steps the LLM may choose from
   top_talkers:  {step: "Find top talkers towards {node} (NetFlow, or a SPAN capture by the network team)"}
   queue_stats:  {step: "Confirm queue drops by class", command: "show platform hardware fed switch active qos queue stats interface {port}"}
-  lease_watch:  {step: "Watch the node's lease renewals while drops continue", command: "oc get lease {node} -n kube-node-lease -w"}
+  lease_watch:  {step: "Watch the node's lease renewals while drops continue", command: "kubectl get lease {node} -n kube-node-lease -w"}
   check_peer_ports: {step: "Compare drops on the other masters' ports", command: "show interfaces {peer_ports} | include drops"}
-  node_journal: {step: "Read the kubelet journal around the flap", command: "oc adm node-logs {node} -u kubelet --since=-30m"}
-  etcd_health:  {step: "Check etcd member health and latency", command: "oc -n openshift-etcd rsh <etcd-pod> etcdctl endpoint status -w table"}
-  node_top:     {step: "See what uses CPU and memory on {node}", command: "oc adm top pods -A --sort-by=memory | head -20"}
+  node_journal: {step: "Read the kubelet journal around the flap", command: "journalctl -u kubelet --since -30min   (on {node})"}
+  etcd_health:  {step: "Check etcd member health and latency", command: "kubectl -n <etcd-namespace> exec <etcd-pod> -- etcdctl endpoint status -w table"}
+  node_top:     {step: "See what uses CPU and memory on {node}", command: "kubectl top pods -A --sort-by=memory | head -20"}
 
 explain_template: |
   Likely cause: {top.statement} ({confidence_label}, {confidence}).

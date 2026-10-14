@@ -171,11 +171,11 @@ class Correlator:
                            "and be marked NotReady.")
         elif timeouts:
             item.title = f"API calls from {node} to the kubernetes Service are timing out"
-            item.impact = "Only OpenShift signals so far; no network signal linked yet."
+            item.impact = "Only infra signals so far; no network signal linked yet."
         elif drops:
             item.title = f"Output drops rising on {switch} {port}" + (f" (feeds {node})" if node else "")
-            item.impact = "Only network signals so far; nothing on the OpenShift side yet." if node else \
-                "Not linked to any OpenShift node."
+            item.impact = "Only network signals so far; nothing on the infra side yet." if node else \
+                "Not linked to any infra node."
         else:
             item.title = live[-1].summary if live else item.title
             item.impact = ""
@@ -185,7 +185,7 @@ class Correlator:
         if len({s.domain for s in live}) >= 2:
             firsts = sorted(min(s.ts for s in live if s.domain == d) for d in {s.domain for s in live})
             gap = (firsts[-1] - firsts[0]).total_seconds()
-            parts.append(f"The {'OpenShift and network' if len(firsts) == 2 else ''} signals started within "
+            parts.append(f"The {'infra and network' if len(firsts) == 2 else ''} signals started within "
                          f"{max(1, round(gap / 60))} min of each other.")
         item.correlation = " ".join(parts)
         item.suggestions = self.suggest(item, drops, timeouts)
@@ -199,7 +199,7 @@ class Correlator:
             out.append(Suggestion(step=f"Check queue drops on {item.port}", command=a.command.format(**params)))
         if pb and item.node and "lease_watch" in pb.actions:
             out.append(Suggestion(step=f"Check {item.node} lease renewals",
-                                  command=f"oc get lease {params['node']} -n kube-node-lease -o yaml"))
+                                  command=f"kubectl get lease {params['node']} -n kube-node-lease -o yaml"))
         team = self.escalation.teams.get("network" if drops else "platform")
         if item.status != "investigating":
             out.append(Suggestion(step=f"No escalation yet. Give the {team.name if team else 'owning team'} a "
